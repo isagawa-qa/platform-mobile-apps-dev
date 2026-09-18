@@ -7,6 +7,9 @@ AI MUST read these files before generating any layer code:
 - roles/*.py      -> Role patterns (@autologger, Task composition, workflows)
 - tests/*.py      -> Test patterns (fixtures, Role calls, Screen assertions)
 
-Locators are platform-keyed dicts, and every value must appear verbatim in a
-committed capture under _captures/. See README.md for full documentation.
+Locators are platform-keyed dicts. Element ids are discovered from a live
+session during /qa-workflow step 4, the same way the Selenium platform takes a
+snapshot and extracts elements before building a Page Object.
+
+See README.md for full documentation.
 """

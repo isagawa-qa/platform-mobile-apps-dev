@@ -25,7 +25,7 @@ class ProductCatalogScreen:
         self.mobile = mobile
 
     # ==================== LOCATORS (Class Constants) ====================
-    # Every value below appears verbatim in _captures/ios-catalog.xml, taken from
+    # Every value below appears verbatim in a live XCUITest session, taken from
     # run 35327677124 on iPhone 16 Pro / iOS 18.6. No id is typed from memory.
     #
     # Keys are "ios" only, never "default". A "default" key CLAIMS the id is
