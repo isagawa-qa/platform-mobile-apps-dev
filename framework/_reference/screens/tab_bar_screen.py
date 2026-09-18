@@ -25,8 +25,8 @@ class TabBarScreen:
         self.mobile = mobile
 
     # ==================== LOCATORS (Class Constants) ====================
-    # Every value appears verbatim in a live XCUITest session and
-    # a live XCUITest session, from run 35327677124.
+    # Every value appears verbatim in a live XCUITest session, from run
+    # 35327677124 on iPhone 16 Pro / iOS 18.6.
     #
     # "ios" keys only, never "default" - no Android capture exists yet.
 
