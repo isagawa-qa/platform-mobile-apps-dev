@@ -26,16 +26,76 @@ did not come from a capture is a guess wearing a constant's name.
 
 ---
 
-## Capturing
+## The Tool You Drive: `appium-mcp`
 
-The session is already running — the app was launched by its capabilities.
+Discovery runs through the MCP server wired in `.mcp.json`, not through a script
+you write. A script cannot explore: each Bash call is a new process, so the
+session dies with it. The MCP server holds one live session across turns, which
+is what makes look-then-decide possible at all.
 
-```python
-# Drive to the screen first, then dump what is on it.
-xml = driver.page_source
-pathlib.Path("tests/_state/captures/ios-product-catalog.xml").write_text(
-    xml, encoding="utf-8")
+Tool names, verbatim:
+
+| Purpose | Tool |
+|---------|------|
+| Create / attach / list / delete a session | `appium_session_management` |
+| Dump the accessibility tree | `appium_get_page_source` |
+| Find an element | `appium_find_element` |
+| Tap, swipe, scroll, drag | `appium_gesture` |
+| Install / activate / terminate the app | `appium_app_lifecycle` |
+| List or switch native ↔ webview | `appium_context` |
+
+The server exposes more than these — list the client's tools to see the rest
+rather than guessing a name.
+
+**A device that is not on this host** is reached by passing `remoteServerUrl` to
+`appium_session_management` when creating the session. It is a tool argument,
+not an environment variable. This is the path for discovering an iOS app from a
+Windows host: point it at a Mac on the network or a cloud device farm. CI is not
+an option for discovery — you cannot look, decide, and tap inside one batch run.
+
+**Vision-based finding stays off** (`AI_VISION_ENABLED: "false"` in `.mcp.json`).
+It can hand back an element that has no stable id, and a locator that cannot be
+traced to a dump is exactly what the evidence gate forbids. Hierarchy only.
+
+---
+
+## The Discovery Loop
+
+Nothing is known in advance. Every target comes from the dump taken one step
+earlier — that is what makes this work on an app the platform has never seen.
+
 ```
+appium_session_management(action=create, ...)   ← app launches by capability
+        │
+        ▼
+appium_get_page_source  ──►  read it; say in plain words what is on screen
+        │
+        ▼
+the scenario's next step says what to do ("open the products tab")
+        │
+        ▼
+match that intent against the labels IN THE DUMP YOU JUST TOOK
+   → that gives you the id this app actually uses
+   → appium_find_element / appium_gesture against that id
+        │
+        ▼
+appium_get_page_source again  ──►  repeat until the flow is walked
+```
+
+Two rules keep the loop honest:
+
+- **Never tap by coordinate.** A blind tap either misses or lands somewhere you
+  did not intend, and you cannot tell which from the result. Where an id genuinely
+  does not exist, use a typed predicate against text or class from the dump.
+- **Never carry an id between apps.** An id discovered in one app says nothing
+  about another. The loop is the product; the ids are per-app output.
+
+---
+
+## Saving The Evidence
+
+A tool result is not evidence — it disappears with the conversation. Write every
+dump to disk as you take it, because the gate greps files, not transcripts.
 
 | Rule | Detail |
 |------|--------|

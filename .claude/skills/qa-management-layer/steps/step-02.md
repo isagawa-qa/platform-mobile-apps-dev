@@ -40,7 +40,9 @@ PRE-CHECK:
     cloud     → credentials for the cloud provider are present in the env
 - Verify the host OS can run the platform:
     ios requires_host_os = darwin. A Windows or Linux host CANNOT run iOS
-    locally. Route it to the ci or cloud venue instead of failing.
+    locally, and conftest now blocks that combination with the alternatives
+    named. Route it to a venue that reaches a machine which HAS the tooling -
+    remote or cloud. NOT ci: see § I, ci cannot serve discovery.
 - Verify the app artifact exists at the resolved path, or that the cloud
   app id is set
 
@@ -104,7 +106,8 @@ RETRY:
 | `credential_strategy` | Must be: static, dynamic, self-contained, none | RE-ASK |
 | Appium server | Must answer at `server_url` | REPORT, wait for user |
 | Device | A simulator/emulator/device must be booted | REPORT, wait for user |
-| Host OS | `requires_host_os` must match, or venue must be ci/cloud | REPORT the venue options |
+| Host OS | `requires_host_os` must match the host | conftest BLOCKS with the alternatives; pick one (§ I) |
+| Venue supports discovery | Must be an interactive venue, never `ci` | REPORT; offer `remote` or `cloud` (§ I) |
 | App artifact | Path exists, or cloud app id set | REPORT the resolved path |
 
 **Blocking Rule:** Cannot proceed to Step 3 until credential strategy is valid
@@ -146,6 +149,52 @@ and a device is reachable.
   • Device: iPhone 16 Pro / iOS 18.6 (venue: ci)
   • Appium: http://127.0.0.1:4723 responding
 ```
+
+---
+
+## I. Which Venue Can Do What
+
+**Discovery and execution are different jobs and not every venue serves both.**
+Discovery is a conversation with a device — look, decide, tap, look again.
+Execution is a batch: run a suite that already exists and report.
+
+| Venue | Device | Discovery (Step 4) | Execution (Step 5) |
+|-------|--------|--------------------|--------------------|
+| `local` | simulator/emulator or USB device on this host | **yes** — fastest | yes |
+| `remote` | a machine on your network that has the tooling | **yes** — pass `remoteServerUrl` | yes |
+| `cloud` | provider device farm | **yes** — pass `remoteServerUrl` | yes |
+| `ci` | a fresh runner, per push | **no** | yes — this is its purpose |
+
+**Why `ci` cannot do discovery.** A CI run is one shot: you commit a script, it
+executes, you read the log. You cannot look at a screen and then decide what to
+tap, because by the time you see anything the run is over. Scripting the walk
+blind means tapping by coordinate, which misses — and you learn that ten minutes
+later. Discovery needs a session you can hold open and interrogate.
+
+**The cross-platform case, stated plainly.** iOS tooling exists only on macOS.
+So for a non-macOS host:
+
+| Your host | Target | Discovery venue |
+|-----------|--------|-----------------|
+| macOS | iOS | `local` |
+| Windows / Linux | iOS | `remote` (a Mac you can reach) or `cloud` |
+| any | Android | `local` |
+
+The app artifact must be reachable from wherever the device is, not from where
+you are sitting: a path on that machine for `remote`, an uploaded app reference
+for `cloud`.
+
+**Artifact kinds are not interchangeable**, and choosing the venue chooses the
+artifact:
+
+| Artifact | Runs on | Never on |
+|----------|---------|----------|
+| `.app` | a simulator | a real device |
+| `.ipa` (signed) | a real device | a simulator |
+| `.apk` | emulator **and** device | — |
+
+A cloud farm of real iOS devices needs a signed `.ipa`. If the user has only a
+simulator build, say so before they spend time on it.
 
 ---
 

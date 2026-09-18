@@ -269,6 +269,21 @@ def device(request, config):
         reason = block.get("note") if block else "block missing"
         pytest.fail(f"platform {name!r} has no usable {venue!r} venue: {reason}")
 
+    required_os = block.get("requires_host_os")
+    if required_os and sys.platform != required_os:
+        alternatives = [
+            v for v in ("remote", "cloud")
+            if platform.get(v) and not platform[v].get("requires_host_os")
+        ]
+        pytest.fail(
+            f"platform {name!r} venue {venue!r} requires host OS {required_os!r} "
+            f"but this host is {sys.platform!r}. iOS tooling does not exist off "
+            f"macOS, so no amount of configuration makes this venue work here. "
+            f"Use a venue that reaches a machine which has it: "
+            f"{', '.join(alternatives) or 'none configured'} — "
+            f"set the venue via the platform's venue variable in .env."
+        )
+
     resolved = _expand_env(dict(block))
     resolved["platformKey"] = name
     resolved["venue"] = venue

@@ -41,7 +41,10 @@ PRE-CHECK:
 - READ platform and device profile from Step 2 state
 
 SESSION START:
-- The app is launched by the session's capabilities. There is NO navigate step.
+- Create the session with `appium_session_management` (action=create). The app
+  is launched by its capabilities. There is NO navigate step.
+- The device must be on an INTERACTIVE venue. For a device not on this host,
+  pass `remoteServerUrl`. CI cannot serve discovery - see step-02.md § I.
 - IF the app needs a reset between runs, that is a capability
   (appium:noReset / appium:fullReset), never a test-level action.
 
@@ -52,11 +55,14 @@ CREDENTIAL HANDLING:
 - IF self-contained: register, sign in (do not persist)
 
 PER SCREEN THE FLOW TOUCHES:
-1. Drive the app to that screen
-2. Capture the page source          → steps/step-04-capture.md
+1. Drive the app to that screen, tapping only what the PREVIOUS dump revealed
+2. `appium_get_page_source`, and write the XML to tests/_state/captures/
 3. Extract candidate ids from the XML
 4. Validate at least one actionable element was found
 5. Record which capture each id came from
+
+   Never tap by coordinate and never reuse an id from another app. The loop is
+   the reusable part; the ids are per-app output. → steps/step-04-capture.md
 
 CHECKPOINT:
 - Every screen the BDD scenario names has a capture on disk
