@@ -156,7 +156,24 @@ jobs:
           IOS_BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
         run: |
           set -euo pipefail
+          # `tests/` ships with conftest.py and data/ only - generated suites land
+          # in tests/<app>/ when /qa-workflow builds them, exactly as the template
+          # does. framework/_reference/ is a code exemplar to read, not a suite to
+          # run: tests/conftest.py is not an ancestor of it, so its fixtures do not
+          # apply there. Until a suite exists, pytest exits 5 (no tests collected)
+          # and a bare invocation paints the run red for an empty repo rather than
+          # for a defect. Exit 5 is therefore reported and treated as a clean skip;
+          # every other non-zero code still fails the job.
+          set +e
           python -m pytest -m ios --platform=ios -v --tb=short
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "::notice::No iOS suite collected yet - tests/ holds conftest.py and data/ only."
+            echo "::notice::Generate one with /qa-workflow; this job then runs it against the simulator."
+            exit 0
+          fi
+          exit "$status"
 
       # if: always() is what makes a red run diagnosable.
       - name: Upload evidence
