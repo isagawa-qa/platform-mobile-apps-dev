@@ -1,0 +1,5 @@
+# Authored on Windows, executed on macOS/Linux runners: keep LF in the repo so
+# shell blocks inside workflows never reach bash with CR characters.
+* text=auto eol=lf
+*.png binary
+*.zip binary

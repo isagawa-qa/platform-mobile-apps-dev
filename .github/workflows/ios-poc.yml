@@ -1,0 +1,148 @@
+name: iOS Simulator PoC
+
+# Proves the platform can drive a real iOS Simulator from a GitHub-hosted macOS
+# runner, so iOS tests need no Mac of our own. Windows machines trigger this and
+# read the results. Standard GitHub-hosted runners are free on public repos.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/ios-poc.yml'
+      - 'tests/**'
+      - 'requirements.txt'
+
+jobs:
+  ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      APPIUM_VERSION: '3.7.0'
+      XCUITEST_DRIVER_VERSION: '12.12.4'
+      APP_RELEASE: '2.2.2'
+      APP_URL: 'https://github.com/saucelabs/my-demo-app-ios/releases/download/2.2.2/SauceLabs-Demo-App.Simulator.zip'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Environment facts
+        run: |
+          set -x
+          sw_vers
+          xcodebuild -version
+          node --version
+          python3 --version
+          xcrun simctl list runtimes
+
+      - name: Pick a booted-capable iPhone simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          # Newest available iPhone on the newest iOS runtime the ACTIVE Xcode
+          # can drive. Xcode 16.x tops out at iOS 18; a newer runtime is present
+          # on the image but Appium's boot monitor times out against it.
+          # Never pipe xcodebuild into head: the early pipe close makes it throw
+          # NSFileHandleOperationException and exit 134 (run 35267898767).
+          xcodebuild -version > xcode-version.txt
+          XCODE_MAJOR=$(awk 'NR==1 {print $2}' xcode-version.txt | cut -d. -f1)
+          export MAX_IOS_MAJOR=$(( XCODE_MAJOR <= 16 ? 18 : 99 ))
+          echo "xcode major $XCODE_MAJOR -> max iOS major $MAX_IOS_MAJOR"
+          xcrun simctl list devices available --json > devices.json
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re, sys
+
+          max_major = int(os.environ["MAX_IOS_MAJOR"])
+          devices = json.load(open("devices.json"))["devices"]
+          best = None
+          for runtime, devs in devices.items():
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not m:
+                  continue
+              version = (int(m.group(1)), int(m.group(2)))
+              if version[0] > max_major:
+                  continue
+              for dev in devs:
+                  if "iPhone" in dev["name"] and dev.get("isAvailable"):
+                      key = (version, dev["name"])
+                      if best is None or key > best[0]:
+                          best = (key, dev)
+          if best is None:
+              sys.exit("no iPhone simulator available on this runner image")
+          (version, name), dev = best
+          print("udid=%s" % dev["udid"])
+          print("name=%s" % name)
+          print("version=%d.%d" % version)
+          PY
+          cat "$GITHUB_OUTPUT"
+
+      - name: Boot the simulator
+        run: |
+          set -euxo pipefail
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      - name: Download the reference app (not vendored — unlicensed binary)
+        id: app
+        run: |
+          set -euxo pipefail
+          mkdir -p apps
+          curl -sSL --retry 3 -o apps/app.zip "$APP_URL"
+          unzip -q -o apps/app.zip -d apps
+          # -print -quit, not | head -1: an early pipe close can SIGPIPE the
+          # producer, which pipefail then reports as a step failure.
+          app_path=$(find "$PWD/apps" -maxdepth 2 -name '*.app' -print -quit)
+          test -n "$app_path"
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app_path/Info.plist")
+          echo "app_path=$app_path" >> "$GITHUB_OUTPUT"
+          echo "bundle_id=$bundle_id" >> "$GITHUB_OUTPUT"
+
+      - name: Install Appium and the XCUITest driver
+        run: |
+          set -euxo pipefail
+          npm install -g "appium@${APPIUM_VERSION}"
+          appium --version
+          appium driver install xcuitest@"${XCUITEST_DRIVER_VERSION}"
+          appium driver list --installed
+
+      # The image's default python3 is Homebrew's and is externally managed
+      # (PEP 668), so a direct pip install fails. setup-python provides an
+      # interpreter we own.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the Python client
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip show Appium-Python-Client selenium | grep -E '^(Name|Version)'
+
+      - name: Start the Appium server
+        run: |
+          set -euxo pipefail
+          appium --port 4723 --log appium.log --log-level info &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:4723/status > /dev/null; then echo "appium up"; exit 0; fi
+            sleep 2
+          done
+          echo "appium did not come up"; cat appium.log; exit 1
+
+      - name: Run the smoke test
+        env:
+          IOS_UDID: ${{ steps.sim.outputs.udid }}
+          IOS_DEVICE_NAME: ${{ steps.sim.outputs.name }}
+          IOS_PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
+          IOS_APP_PATH: ${{ steps.app.outputs.app_path }}
+          IOS_BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
+        run: python -m pytest tests/test_ios_smoke.py -v --tb=short
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-poc-evidence
+          path: |
+            appium.log
+            artifacts/
+          if-no-files-found: warn
