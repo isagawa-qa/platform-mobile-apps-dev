@@ -1,0 +1,244 @@
+# Setup Guide — platform-mobile-apps
+
+Isagawa QA platform for mobile apps. Appium in the Interface, the same 5-layer
+contract as platform-selenium: Test → Role → Task → Screen → Interface.
+
+This repo ships **pre-domain-setup**. It carries the kernel but no generated
+protocol, hooks, lessons or state — you generate those yourself at Step 5, and
+nothing under `.claude/` works until you do.
+
+## Prerequisites (all hosts)
+
+| Tool | Version | Verify | Expect |
+|---|---|---|---|
+| Python | 3.10+ | `python --version` | `Python 3.1x.x` |
+| Node.js | `^20.19 \|\| ^22.12 \|\| >=24` | `node --version` | e.g. `v24.11.1` |
+| Git | any | `git --version` | a version line |
+| Appium | 3.7.0 | `appium --version` | `3.7.0` |
+
+## Step 1: Clone
+
+```bash
+git clone https://github.com/isagawa-qa/platform-mobile-apps.git
+cd platform-mobile-apps
+```
+
+**Verify:** `ls framework/interfaces/mobile_interface.py` → the file exists.
+
+## Step 2: Python environment
+
+```bash
+# macOS / Linux
+python3 -m venv .venv && source .venv/bin/activate
+
+# Windows
+python -m venv .venv && .venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+**Verify:** `pip show Appium-Python-Client` → `Version: 6.0.6`.
+
+## Step 3: Fetch the reference apps
+
+The demo apps are **never committed** — neither carries a LICENSE, so no
+redistribution right is granted. `apps/` is git-ignored except its README.
+
+Release URLs and tags are in [`apps/README.md`](apps/README.md).
+
+**Verify:** `ls apps/*.app apps/*.apk` → at least one build present.
+
+## Step 4: Choose your host section
+
+macOS can run both platforms. Windows runs Android locally and reaches iOS
+through CI or a cloud device.
+
+---
+
+## macOS host
+
+### 4a.1 Xcode and command line tools
+**Verify:** `xcodebuild -version` → `Xcode 16.x`
+
+The version is deliberately loose: the CI picker caps the simulator runtime at
+the active Xcode's major, because the *pairing* is what matters, not the
+absolute version.
+
+### 4a.2 An iOS 18 simulator
+**Verify:** `xcrun simctl list runtimes` → a row containing `iOS 18.x`
+
+### 4a.3 Appium and the XCUITest driver
+```bash
+npm install -g appium@3.7.0
+appium driver install xcuitest@12.12.4
+```
+**Verify:** `appium driver list --installed` → `xcuitest@12.12.4`
+
+### 4a.4 JDK 17 and the Android SDK
+Only if you intend to run Android on the Mac. Follow the Windows preflight below
+from step 4b.2 onward.
+
+### 4a.5 Doctor
+**Verify:** `appium driver doctor xcuitest` → zero *necessary* failures.
+Optional-dependency warnings are fine.
+
+### Running iOS locally, with no CI in the loop
+Set `platforms.ios.venue` to `local` (or leave `MOBILE_VENUE_IOS` unset — it
+defaults to `local`), then:
+```bash
+pytest -m ios --platform=ios
+```
+**Expect:** a session opens against your booted simulator. A Mac needs no CI for
+any of this.
+
+---
+
+## Windows host
+
+### 4b.1 iOS on Windows
+There is no local Apple toolchain. Two supported routes:
+- Set `platforms.ios.venue` to `cloud` or `remote` and put credentials in `.env`.
+- Or push to CI: `.github/workflows/ios-reference.yml` runs on a GitHub-hosted Mac.
+
+**Verify:** `python -c "import json;d=json.load(open('framework/resources/config/environment_config.json'));print(d['platforms']['ios']['venue'])"`
+→ prints the venue expression.
+
+### 4b.2 JDK 17
+**Verify:** `java -version` → `openjdk version "17.x"`
+
+### 4b.3 Android SDK command-line tools
+**Verify:** `sdkmanager --version` → a version line
+
+### 4b.4 Platform tools
+```bash
+sdkmanager "platform-tools" "platforms;android-34"
+```
+**Verify:** `adb version` → `Android Debug Bridge version 1.0.x`
+
+### 4b.5 A system image with Google APIs
+```bash
+sdkmanager "system-images;android-34;google_apis;x86_64"
+```
+**Verify:** `sdkmanager --list_installed | grep google_apis` → the image is listed
+
+A `google_apis` image is required, not the plain `default` one: the plain image
+ships no Chrome, and the mobile-web lane needs a browser.
+
+### 4b.6 Create an AVD
+```bash
+avdmanager create avd -n mobileqa_api34 -k "system-images;android-34;google_apis;x86_64"
+```
+**Verify:** `emulator -list-avds` → `mobileqa_api34`
+
+### 4b.7 Confirm hardware acceleration
+**Verify:** `emulator -accel-check` → `WHPX (10.0.x) is installed and usable`
+
+On an AMD host with Hyper-V, WSL2 or Docker Desktop running, **WHPX is the only
+accelerator that coexists**. HAXM does not support AMD, and AEHD requires the
+hypervisor off, which would break WSL2 and Docker.
+
+### 4b.8 Boot the emulator on the Windows host
+```bash
+emulator -avd mobileqa_api34
+```
+Run it on the host directly — **not** inside WSL or Docker. Google's own docs
+forbid nested VM acceleration.
+
+**Verify:** `adb devices` → one line reading `emulator-5554   device`
+
+### 4b.9 Appium and the UiAutomator2 driver
+```bash
+npm install -g appium@3.7.0
+appium driver install uiautomator2@8.7.0
+```
+**Verify:** `appium driver list --installed` → `uiautomator2@8.7.0`
+
+### 4b.10 Start the Appium server
+```bash
+appium --port 4723 --log appium.log --log-level info
+```
+**Verify:** `curl -s http://127.0.0.1:4723/status` → JSON containing `"ready":true`
+
+### 4b.11 Environment file
+Copy `.env.example` to `.env` and fill the keys you need.
+**Verify:** `ls .env` → the file exists. It is git-ignored and must stay so.
+
+> **Android is currently deferred** by owner decision so the iOS path can be
+> proven first. The preflight above is documented and correct; it has not yet
+> been exercised end to end on this platform.
+
+---
+
+## Step 5: Verify setup
+
+Run the env-repro probes before blaming any test. They are what separates an
+environment failure from a code failure.
+
+| Probe | Expect |
+|---|---|
+| `emulator -accel-check` | `WHPX ... is installed and usable` |
+| `adb devices` | a line `emulator-5554   device` |
+| `curl -s http://127.0.0.1:4723/status` | JSON containing `"ready":true` |
+| `python -m pytest --fixtures -q` | lists `driver`, `config`, `device`, `mobile`, `artifacts_dir`, `test_users`, `workflow_data` |
+
+## Step 6: Run `/kernel/session-start`, then `/kernel/domain-setup`
+
+**Both, in that order. Neither is optional.**
+
+This repo ships pre-domain-setup: there is no generated protocol, no domain
+hooks, no `.claude/lessons/lessons.md` and no `.claude/state/`. `domain-setup`
+step 8 is what creates them.
+
+`session-start` is not optional either — `universal-gate-enforcer.py` is a
+PreToolUse hook on `Edit`, `Write` and `Bash`. With no `session_state.json` it
+reads `{}` and **blocks your very first action** with `BLOCKED: Session not
+started`. So the guarantee that makes this repo clean to ship is the same thing
+that stops a fresh installer dead unless session-start runs first.
+
+```
+/kernel/session-start
+/kernel/domain-setup
+```
+
+**Verify:** `.claude/protocols/<domain>-protocol.md` and
+`.claude/lessons/lessons.md` both exist.
+
+## Step 7: Run the reference suite
+
+```bash
+pytest -m ios --platform=ios        # macOS, or CI
+pytest -m android --platform=android
+```
+
+**Expect:** Reference Flow 1 — log in, add a product to the cart, check out —
+running as one test body.
+
+## Next Steps
+
+| Doc | Purpose |
+|---|---|
+| [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) | Extending the platform; the 5-layer contract in full |
+| [`INTEGRATION.md`](INTEGRATION.md) | Adopting the platform in a consuming project |
+| `/qa-workflow` | Describe a workflow in English, get Screens, Tasks, Roles and a test |
+
+`/qa-workflow` is reachable **only after Step 6**. It reads the generated
+protocol and lessons file, and blocks on them if they do not exist.
+
+## Troubleshooting
+
+**`BLOCKED: <something>` on your first command.** The kernel is telling you what
+to invoke. Run the command it names — usually `/kernel/session-start`. Do not
+edit state files to get past it.
+
+**`error: externally-managed-environment` on macOS.** The system python is
+Homebrew-managed under PEP 668. Use the venv from Step 2, or `actions/setup-python`
+in CI.
+
+**`emulator -accel-check` says WHPX is not usable.** Enable the Windows
+Hypervisor Platform feature and reboot. If HAXM is installed, remove it — it
+does not support AMD and conflicts with WHPX.
+
+**iOS session times out waiting for WebDriverAgent.** WDA is compiled by
+`xcodebuild` on first use; a cold machine outlasts Appium's default 60s wait.
+The shipped iOS blocks already carry `appium:wdaLaunchTimeout: 600000` with two
+retries. If you overrode it, put it back.

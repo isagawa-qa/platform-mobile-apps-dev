@@ -1,0 +1,170 @@
+name: iOS reference suite
+
+# Runs the real _reference suite on the GitHub macos-15 simulator. This is the
+# promotion of the proof of concept (run 35270978418 at 8079d2a) from three smoke
+# assertions to the actual platform suite.
+#
+# The asymmetry with Android is deliberate: iOS goes to CI because a Windows host
+# cannot run it at all, and Android stays local because a Windows host runs it for
+# free on WHPX. CI is not the better venue for iOS - it is the only venue.
+#
+# Every step carrying a run id is a REGRESSION GUARD. Removing it re-opens a
+# failure that actually happened.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'framework/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/ios-reference.yml'
+
+jobs:
+  ios-reference:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      APPIUM_VERSION: 3.7.0
+      XCUITEST_DRIVER_VERSION: 12.12.4
+      APP_RELEASE_TAG: '2.2.2'
+      APP_ASSET: SauceLabs-Demo-App.Simulator.XCUITest.zip
+      APP_REPO: saucelabs/my-demo-app-ios
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Environment facts
+        run: |
+          sw_vers
+          xcodebuild -version
+          node --version
+          xcrun simctl list runtimes
+
+      # Three proven fixes in one step:
+      #  - xcodebuild -version REDIRECTED to a file, never piped to head. Under
+      #    `set -o pipefail` head closes the pipe and xcodebuild dies of SIGPIPE
+      #    (run 35267898767).
+      #  - the runtime is capped at the ACTIVE Xcode's major; taking the newest
+      #    runtime on the image fails when Xcode cannot drive it (run 35267716420).
+      #  - the python heredoc is INDENTED INSIDE this block scalar (run 35267016755).
+      - name: Pick a bootable iPhone simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          xcodebuild -version > xcode-version.txt
+          XCODE_MAJOR="$(awk 'NR==1 {split($2, v, "."); print v[1]}' xcode-version.txt)"
+          MAX_IOS_MAJOR=99
+          if [ "${XCODE_MAJOR}" -le 16 ]; then
+            MAX_IOS_MAJOR=18
+          fi
+          echo "Xcode major ${XCODE_MAJOR}; capping iOS major at ${MAX_IOS_MAJOR}"
+          xcrun simctl list devices available --json > devices.json
+          python3 - <<PY
+          import json, os, re
+          cap = int("${MAX_IOS_MAJOR}")
+          data = json.load(open("devices.json"))
+          best = None
+          for runtime, devices in data["devices"].items():
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not m:
+                  continue
+              major, minor = int(m.group(1)), int(m.group(2))
+              if major > cap:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      key = (major, minor)
+                      if best is None or key > best[0]:
+                          best = (key, d, f"{major}.{minor}")
+          if best is None:
+              raise SystemExit("no available iPhone simulator at or below iOS %d" % cap)
+          (_, device, version) = best
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("udid=%s\n" % device["udid"])
+              fh.write("name=%s\n" % device["name"])
+              fh.write("version=%s\n" % version)
+          print("selected:", device["name"], version, device["udid"])
+          PY
+
+      - name: Boot the simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      - name: Fetch the reference app
+        id: app
+        run: |
+          set -euo pipefail
+          curl -sSL --retry 3 -o app.zip \
+            "https://github.com/${APP_REPO}/releases/download/${APP_RELEASE_TAG}/${APP_ASSET}"
+          unzip -q app.zip -d app
+          APP_PATH="$(find app -maxdepth 2 -name '*.app' -print -quit)"
+          test -n "${APP_PATH}" || { echo "no .app found in the release asset"; exit 1; }
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${APP_PATH}/Info.plist")"
+          echo "app_path=${PWD}/${APP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "bundle_id=${BUNDLE_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Appium and the XCUITest driver
+        run: |
+          set -euo pipefail
+          npm install -g "appium@${APPIUM_VERSION}"
+          appium driver install "xcuitest@${XCUITEST_DRIVER_VERSION}"
+          appium driver list --installed
+
+      # The image's default python3 is Homebrew-managed and externally managed
+      # under PEP 668, so pip refuses it (run 35267325322). The pytest step below
+      # must use THIS interpreter.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the Python client
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements.txt
+          pip show Appium-Python-Client
+          pip show selenium
+
+      - name: Start Appium
+        run: |
+          set -euo pipefail
+          appium --port 4723 --log appium.log --log-level info &
+          for _ in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:4723/status > /dev/null; then
+              echo "Appium is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Appium did not come up; dumping the log:"
+          cat appium.log
+          exit 1
+
+      # WDA gets 600s with 2 retries and the boot re-check gets 300s, but those
+      # values live in environment_config.json, never here. The workflow exports
+      # only what is genuinely runner-specific: the chosen simulator and the app.
+      - name: Run the reference suite
+        env:
+          MOBILE_VENUE_IOS: ci
+          IOS_UDID: ${{ steps.sim.outputs.udid }}
+          IOS_DEVICE_NAME: ${{ steps.sim.outputs.name }}
+          IOS_PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
+          IOS_APP_PATH: ${{ steps.app.outputs.app_path }}
+          IOS_BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
+        run: |
+          set -euo pipefail
+          python -m pytest -m ios --platform=ios -v --tb=short
+
+      # if: always() is what makes a red run diagnosable.
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-reference-evidence
+          path: |
+            appium.log
+            artifacts/
+          if-no-files-found: warn
