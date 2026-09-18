@@ -1,1 +1,1 @@
-"""Reference Task implementations - AI reads these for Task patterns."""
+"""Reference Task implementations - AI reads these for Task module patterns."""
