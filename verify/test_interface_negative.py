@@ -19,7 +19,7 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-DEV = pathlib.Path(__file__).resolve().parent.parent.parent
+DEV = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(DEV / "framework"))
 
 from selenium.common.exceptions import TimeoutException, WebDriverException  # noqa: E402

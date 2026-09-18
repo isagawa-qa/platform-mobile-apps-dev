@@ -14,7 +14,7 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-DEV = pathlib.Path(__file__).resolve().parent.parent.parent
+DEV = pathlib.Path(__file__).resolve().parent.parent
 MI = DEV / "framework" / "interfaces" / "mobile_interface.py"
 SRC = MI.read_text(encoding="utf-8")
 TREE = ast.parse(SRC)

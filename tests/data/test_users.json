@@ -1,0 +1,30 @@
+{
+  "_comment": "Credentials for the Sauce Labs My Demo App reference app. These are the app's own PUBLISHED demo accounts, documented by the vendor for automation practice - they are not real credentials and grant access to nothing. Any account that is real belongs in .env, which is git-ignored, and is read through a ${VAR} in environment_config.json.",
+  "standard_user": {
+    "username": "bob@example.com",
+    "password": "10203040",
+    "description": "The default account. Completes the full login, catalog, cart and checkout flow."
+  },
+  "locked_user": {
+    "username": "alice@example.com",
+    "password": "10203040",
+    "description": "Locked account. Login is expected to fail; used for the negative path."
+  },
+  "checkout": {
+    "full_name": "Rebecca Winter",
+    "address_line_1": "Mandorley 112",
+    "address_line_2": "Apt. 214",
+    "city": "Truro",
+    "state_region": "Cornwall",
+    "zip_code": "89750",
+    "country": "United Kingdom",
+    "description": "Shipping address used by the checkout phase of Reference Flow 1."
+  },
+  "payment": {
+    "full_name": "Rebecca Winter",
+    "card_number": "3258 1265 7568 789",
+    "expiration_date": "03/25",
+    "security_code": "123",
+    "description": "The vendor's documented demo card for the reference app. Not a real instrument."
+  }
+}
