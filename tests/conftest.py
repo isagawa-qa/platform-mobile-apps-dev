@@ -47,6 +47,10 @@ _NON_CAPABILITY_KEYS = frozenset({
 
 _VAR = re.compile(r"\$\{([A-Z0-9_]+)(?::-([^}]*))?\}")
 
+# Capabilities that by themselves decide which app the session launches. If a
+# venue block sets any of them, app resolution is skipped entirely.
+_LAUNCH_KEYS = frozenset({"appium:app", "appium:bundleId", "appium:appPackage"})
+
 _PHASE_REPORT_KEY = pytest.StashKey[dict]()
 
 
@@ -93,6 +97,67 @@ def _expand_env(value):
         pytest.fail(f"{name} is not set; set it in .env")
 
     return _VAR.sub(sub, value)
+
+
+def _resolve_app_capabilities(config, app_name, family, venue):
+    """Map a platform's default_app to the capabilities that launch it.
+
+    Without this the session attaches to whatever is already on the device and
+    the `apps` registry is decorative, which is what it was until this shipped.
+
+    Rules, in order:
+      - No default_app (the -web platforms) means no app: those drive a browser.
+      - The cloud venue takes a provider app reference, never a local path.
+      - Otherwise a path wins and `appium:app` installs and launches it.
+      - Only when there is no path does the identifier apply, launching an app
+        already installed. Expansion is lazy for exactly this reason: app_id is
+        often ${IOS_BUNDLE_ID} with no default, and expanding it eagerly would
+        fail a local run whose path was perfectly good.
+    """
+    if not app_name:
+        return {}
+
+    apps = config.get("apps", {})
+    if app_name not in apps:
+        pytest.fail(
+            f"default_app {app_name!r} is not a key of apps in {CONFIG_PATH}"
+        )
+    entry = apps[app_name]
+
+    if venue == "cloud":
+        reference = _expand_env(entry.get("cloud", {}).get(family, ""))
+        if not reference:
+            pytest.fail(
+                f"app {app_name!r} has no cloud reference for {family!r}; "
+                f"set it under apps.{app_name}.cloud.{family} in {CONFIG_PATH}"
+            )
+        return {"appium:app": reference}
+
+    slot = entry.get(family)
+    if not slot:
+        pytest.fail(
+            f"app {app_name!r} has no {family!r} entry in {CONFIG_PATH}"
+        )
+
+    if slot.get("path"):
+        path = Path(_expand_env(slot["path"]))
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        if not path.exists():
+            pytest.fail(
+                f"app artifact for {app_name!r} ({family}) is not at {path}. "
+                f"Fetch it — see SETUP.md Step 3 — or set the path override in .env."
+            )
+        return {"appium:app": str(path)}
+
+    if slot.get("app_id"):
+        key = "appium:bundleId" if family == "ios" else "appium:appPackage"
+        return {key: _expand_env(slot["app_id"])}
+
+    pytest.fail(
+        f"app {app_name!r} ({family}) declares neither a path nor an app_id "
+        f"in {CONFIG_PATH}"
+    )
 
 
 def _build_options(profile):
@@ -207,6 +272,28 @@ def device(request, config):
     resolved = _expand_env(dict(block))
     resolved["platformKey"] = name
     resolved["venue"] = venue
+    resolved["family"] = platform.get("family", "")
+    resolved["markers"] = platform.get("markers", [])
+    resolved["default_app"] = platform.get("default_app")
+
+    # The app under test is a property of the platform, not of the venue block,
+    # so it is resolved here and merged in. An explicit capability in config
+    # always wins: a venue that names its own app is making a deliberate
+    # statement this must not overwrite.
+    #
+    # The explicit check comes FIRST and short-circuits resolution. Resolving
+    # and then deferring would be wrong, because resolution fails hard on a
+    # missing artifact - so an override would be unreachable in exactly the
+    # case it exists for, which is pointing somewhere other than the default.
+    capabilities = dict(resolved.get("capabilities", {}))
+    if not _LAUNCH_KEYS & capabilities.keys():
+        capabilities.update(
+            _resolve_app_capabilities(
+                config, resolved["default_app"], resolved["family"], venue
+            )
+        )
+    resolved["capabilities"] = capabilities
+
     yield resolved
 
 

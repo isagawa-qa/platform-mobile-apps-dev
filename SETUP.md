@@ -12,9 +12,13 @@ nothing under `.claude/` works until you do.
 | Tool | Version | Verify | Expect |
 |---|---|---|---|
 | Python | 3.10+ | `python --version` | `Python 3.1x.x` |
-| Node.js | `^20.19 \|\| ^22.12 \|\| >=24` | `node --version` | e.g. `v24.11.1` |
+| Node.js | **22+** | `node --version` | e.g. `v24.11.1` |
 | Git | any | `git --version` | a version line |
 | Appium | 3.7.0 | `appium --version` | `3.7.0` |
+
+Node 22 is a hard floor, not a preference: `appium-mcp` — the discovery server
+wired in `.mcp.json` — requires it. Appium itself runs on 20, so a Node 20 host
+will run generated tests and then fail only when you try to discover anything.
 
 ## Step 1: Clone
 
@@ -180,6 +184,32 @@ environment failure from a code failure.
 | `adb devices` | a line `emulator-5554   device` |
 | `curl -s http://127.0.0.1:4723/status` | JSON containing `"ready":true` |
 | `python -m pytest --fixtures -q` | lists `driver`, `config`, `device`, `mobile`, `artifacts_dir`, `test_users`, `workflow_data` |
+| `npx appium-mcp@latest --help` | the MCP server resolves and runs (first run downloads it) |
+
+### The discovery server
+
+`.mcp.json` wires [`appium-mcp`](https://github.com/appium/appium-mcp), the Appium
+project's own MCP server. It is what `/qa-workflow` step 4 drives to find elements
+in your app. It is the mobile counterpart of the Playwright MCP server the Selenium
+platform uses, and it plays the same role: **it discovers; it does not generate.**
+Generated tests never go through it — they run through `tests/conftest.py` and
+`MobileInterface`.
+
+Two settings in `.mcp.json` are deliberate:
+
+| Setting | Why |
+|---|---|
+| `AI_VISION_ENABLED: "false"` | Vision-based element finding can return a target that has no stable id, which cannot be traced back to a page source. The platform's evidence rule forbids writing such a locator. Hierarchy only. |
+| `APPIUM_MCP_ON_CLIENT_DISCONNECT: "delete_all"` | Sessions are torn down when the client disconnects. On a paid device farm an orphaned session bills until it times out. |
+
+**Android:** add `"ANDROID_HOME": "<your sdk path>"` to the `env` block. It is left
+out because it is machine-specific and Android is not yet in scope.
+
+**Driving a device that is not on this host** — the Windows-to-iOS case — is done by
+passing `remoteServerUrl` to the `appium_session_management` tool when creating the
+session. It is a tool argument, not an environment variable. Set
+`REMOTE_SERVER_URL_ALLOW_REGEX` in `.mcp.json` if you want to restrict which
+servers may be reached.
 
 ## Step 6: Run `/kernel/session-start`, then `/kernel/domain-setup`
 
