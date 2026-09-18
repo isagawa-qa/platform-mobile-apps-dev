@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.env
+.venv
+venv/
+ENV/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/state/
+
+# Build pipeline scratch — manifest derivation and gate evidence, never shipped
+_context/
+
+# Logs
+*.log
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+screenshots/
+tests/_reports/
+tests/_state/
+
+# App builds under test — fetched at setup into apps/, never committed.
+# Neither demo app carries a LICENSE, so no redistribution right is granted.
+apps/*
+!apps/README.md
+*.apk
+*.ipa
+*.app/
+*.app.zip
+
+# Mobile run artifacts — screenshots, page source, Appium server log
+artifacts/
