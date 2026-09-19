@@ -102,7 +102,7 @@ Check if configured in `.mcp.json` at the repository root. (Claude Code reads
 ```
 
 **If not configured:**
-1. Create/update `.claude/mcp.json` with required config
+1. Create/update `.mcp.json` at the repository root with required config
 2. Set restart state (see below)
 3. Stop and wait for restart
 
