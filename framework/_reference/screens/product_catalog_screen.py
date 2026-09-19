@@ -48,9 +48,23 @@ class ProductCatalogScreen:
     # sheet's predicate-expression placeholder is unshippable as written.
 
     def locator(self, name: str):
-        """Resolve a platform-keyed locator constant for the current platform."""
+        """Resolve a platform-keyed locator constant for the current platform.
+
+        Missing keys raise. A silent fall back to another platform's id is worse
+        than failing: the id was never captured on this platform, so at best the
+        run dies later with a confusing NoSuchElement, and at worst it matches
+        something that happens to share the id and the test passes for the wrong
+        reason. An uncaptured platform is a gap to report, not one to paper over.
+        """
         entry = getattr(self, name)
-        return entry.get(self.mobile.platform) or entry["ios"]
+        platform = self.mobile.platform
+        if platform not in entry:
+            raise KeyError(
+                f"{type(self).__name__}.{name} has no {platform!r} locator "
+                f"(present: {sorted(entry)}). Capture the screen on {platform} "
+                f"and add the id - do not reuse another platform's."
+            )
+        return entry[platform]
 
     # ==================== ATOMIC METHODS (One UI Action) ====================
 
@@ -61,8 +75,7 @@ class ProductCatalogScreen:
 
     def open_product_at(self, index: int = 0) -> "ProductCatalogScreen":
         """Open the product tile at the given position."""
-        items = self.mobile.find_elements(*self.locator("PRODUCT_ITEM"))
-        items[index].click()
+        self.mobile.click_element_at(*self.locator("PRODUCT_ITEM"), index=index)
         return self
 
     def scroll_to_product_item(self) -> "ProductCatalogScreen":
@@ -82,10 +95,8 @@ class ProductCatalogScreen:
 
     def get_product_name_at(self, index: int = 0) -> str:
         """Read the visible name of the product tile at the given position."""
-        names = self.mobile.find_elements(*self.locator("PRODUCT_NAME"))
-        return names[index].text
+        return self.mobile.get_text_at(*self.locator("PRODUCT_NAME"), index=index)
 
     def get_product_price_at(self, index: int = 0) -> str:
         """Read the visible price of the product tile at the given position."""
-        prices = self.mobile.find_elements(*self.locator("PRODUCT_PRICE"))
-        return prices[index].text
+        return self.mobile.get_text_at(*self.locator("PRODUCT_PRICE"), index=index)

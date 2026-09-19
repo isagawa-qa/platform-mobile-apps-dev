@@ -35,9 +35,23 @@ class TabBarScreen:
     MORE_TAB = {"ios": (AppiumBy.ACCESSIBILITY_ID, "More-tab-item")}
 
     def locator(self, name: str):
-        """Resolve a platform-keyed locator constant for the current platform."""
+        """Resolve a platform-keyed locator constant for the current platform.
+
+        Missing keys raise. A silent fall back to another platform's id is worse
+        than failing: the id was never captured on this platform, so at best the
+        run dies later with a confusing NoSuchElement, and at worst it matches
+        something that happens to share the id and the test passes for the wrong
+        reason. An uncaptured platform is a gap to report, not one to paper over.
+        """
         entry = getattr(self, name)
-        return entry.get(self.mobile.platform) or entry["ios"]
+        platform = self.mobile.platform
+        if platform not in entry:
+            raise KeyError(
+                f"{type(self).__name__}.{name} has no {platform!r} locator "
+                f"(present: {sorted(entry)}). Capture the screen on {platform} "
+                f"and add the id - do not reuse another platform's."
+            )
+        return entry[platform]
 
     # ==================== ATOMIC METHODS (One UI Action) ====================
 

@@ -127,7 +127,23 @@ jobs:
             sleep 2
           done
           test -n "${URL}" || { echo "tunnel did not come up"; cat cloudflared.log; exit 1; }
-          curl -sf "${URL}/status" > /dev/null || { echo "tunnel up but Appium unreachable through it"; exit 1; }
+          echo "tunnel URL registered locally: ${URL}"
+
+          # cloudflared prints the hostname BEFORE the edge finishes routing it,
+          # so the first request through it loses a race the tunnel then wins a
+          # few seconds later. Retry rather than treating one refusal as fatal.
+          READY=""
+          for i in $(seq 1 45); do
+            if curl -sf --max-time 5 "${URL}/status" > /dev/null; then READY=1; break; fi
+            sleep 2
+          done
+          if [ -z "${READY}" ]; then
+            echo "tunnel up but Appium never became reachable through it after 90s"
+            echo "--- local Appium check ---"; curl -sv --max-time 5 http://127.0.0.1:4723/status 2>&1 | tail -20
+            echo "--- cloudflared ---";        tail -40 cloudflared.log
+            exit 1
+          fi
+          echo "Appium reachable through the tunnel after ${i} attempt(s)"
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
       - name: Session facts

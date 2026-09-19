@@ -54,6 +54,58 @@ class MobileInterface:
             self.logger.error(f"Driver error finding elements: by={by}, value={value}, error={exc}")
             raise
 
+    def click_element_at(self, by: str, value: str, index: int = 0,
+                         timeout: Optional[int] = None) -> None:
+        """Click the element at `index` among all elements matching the locator.
+
+        Repeated list and grid items routinely share one accessibility id, so
+        selecting by position is the only option available. Without this the
+        caller has to hold a raw WebElement and call .click() on it, which
+        reaches past this Interface and breaks the layer boundary the whole
+        platform rests on.
+        """
+        elements = self.find_elements(by, value, timeout)
+        if index >= len(elements):
+            self.logger.error(
+                f"Element index out of range: by={by}, value={value}, "
+                f"index={index}, found={len(elements)}"
+            )
+            raise IndexError(
+                f"index {index} but only {len(elements)} element(s) match {value!r}"
+            )
+        try:
+            elements[index].click()
+        except WebDriverException as exc:
+            self.logger.error(
+                f"Driver error clicking element at index: by={by}, value={value}, "
+                f"index={index}, error={exc}"
+            )
+            raise
+
+    def get_text_at(self, by: str, value: str, index: int = 0,
+                    timeout: Optional[int] = None) -> str:
+        """Read text from the element at `index` among all matching elements.
+
+        The read counterpart of click_element_at, and there for the same reason.
+        """
+        elements = self.find_elements(by, value, timeout)
+        if index >= len(elements):
+            self.logger.error(
+                f"Element index out of range: by={by}, value={value}, "
+                f"index={index}, found={len(elements)}"
+            )
+            raise IndexError(
+                f"index {index} but only {len(elements)} element(s) match {value!r}"
+            )
+        try:
+            return elements[index].text
+        except WebDriverException as exc:
+            self.logger.error(
+                f"Driver error reading text at index: by={by}, value={value}, "
+                f"index={index}, error={exc}"
+            )
+            raise
+
     def is_element_present(self, by: str, value: str, timeout: Optional[int] = None) -> bool:
         try:
             self.find_element(by, value, timeout)

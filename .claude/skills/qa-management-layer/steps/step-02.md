@@ -125,7 +125,7 @@ and a device is reachable.
 | User chooses dynamic | App needs a registration flow |
 | User chooses self-contained | Test is independent |
 | User chooses none | No auth required for this test |
-| iOS requested on Windows | Route to ci; record that this host cannot run iOS locally |
+| iOS requested on Windows | Route to `remote` or `cloud`; record that this host cannot run iOS locally. NOT `ci` - it cannot serve discovery (SS I) |
 | Appium not answering | Record the start command that worked, for next time |
 
 ---

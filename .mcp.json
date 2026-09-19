@@ -3,7 +3,7 @@
     "appium-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["appium-mcp@latest"],
+      "args": ["appium-mcp@1.94.1"],
       "env": {
         "AI_VISION_ENABLED": "false",
         "APPIUM_MCP_ON_CLIENT_DISCONNECT": "delete_all"

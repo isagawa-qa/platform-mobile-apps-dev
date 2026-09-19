@@ -40,6 +40,11 @@
         "pin": "8.7.0",
         "install": "appium driver install uiautomator2@{pin}"
       }
+    },
+    "appium_mcp": {
+      "pin": "1.94.1",
+      "probe": "npx appium-mcp@1.94.1 --version",
+      "why": "the discovery server wired in .mcp.json"
     }
   },
   "apps": {
