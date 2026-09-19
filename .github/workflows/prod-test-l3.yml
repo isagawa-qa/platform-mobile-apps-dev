@@ -94,7 +94,9 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip show Appium-Python-Client | head -2
+          # sed, not head: head closes the pipe after N lines, pip takes SIGPIPE,
+          # and pipefail turns a successful install into a failed step (exit 120).
+          pip show Appium-Python-Client | sed -n '1,2p'
 
       - name: Install Appium and the XCUITest driver
         run: |
