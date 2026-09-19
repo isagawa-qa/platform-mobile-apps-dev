@@ -151,23 +151,36 @@ jobs:
           from _reference.tasks.shopping_tasks import ShoppingTasks
           from _reference.screens.product_catalog_screen import ProductCatalogScreen
           from _reference.screens.product_detail_screen import ProductDetailScreen
+          from _reference.screens.cart_screen import CartScreen
 
           logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
           log = logging.getLogger("L3")
           cfg = json.loads(pathlib.Path("_test/device/test_config.json").read_text(encoding="utf-8"))
           results, failures = {}, []
 
+          # Build the session through the PLATFORM'S OWN resolution rather than
+          # hand-built capabilities. The previous revision hardcoded a minimal
+          # cap set and so never applied appium:wdaLaunchTimeout / retries, which
+          # the ios blocks in environment_config.json already set - and WDA's
+          # cold-start build then blew the default 60s and failed 004. The config
+          # knew; the harness had not asked. Going through conftest also puts
+          # _expand_env, _resolve_app_capabilities and _build_options under test.
+          sys.path.insert(0, "tests")
+          import conftest as cf
+
+          doc = json.loads(pathlib.Path(
+              "framework/resources/config/environment_config.json").read_text(encoding="utf-8"))
+          plat = doc["platforms"]["ios"]
+
           def build_session():
-              o = XCUITestOptions()
-              for k, v in [("platformName", "iOS"),
-                           ("appium:automationName", "XCUITest"),
-                           ("appium:udid", cfg["udid"]),
-                           ("appium:deviceName", cfg["device_name"]),
-                           ("appium:platformVersion", cfg["platform_version"]),
-                           ("appium:bundleId", cfg["bundle_id"]),
-                           ("appium:newCommandTimeout", 300)]:
-                  o.set_capability(k, v)
-              return webdriver.Remote(cfg["server_url"], options=o)
+              resolved = cf._expand_env(dict(plat["ci"]))
+              caps = dict(resolved.get("capabilities", {}))
+              if not cf._LAUNCH_KEYS & caps.keys():
+                  caps.update(cf._resolve_app_capabilities(
+                      doc, plat.get("default_app"), plat.get("family"), "ci"))
+              resolved["capabilities"] = caps
+              opts = cf._build_options(resolved)
+              return webdriver.Remote(resolved["server_url"], options=opts)
 
           # ---- 004: a real session opens, and page source comes back ----------
           drv = None
@@ -215,6 +228,7 @@ jobs:
               drv = build_session()
               m = MobileInterface(drv, cfg, log, "ios")
               catalog, detail = ProductCatalogScreen(m), ProductDetailScreen(m)
+              cart = CartScreen(m)
               tasks = ShoppingTasks(m)
               steps, counts = [], {}
 
@@ -233,11 +247,19 @@ jobs:
               counts["detail_add_available"] = detail.is_add_to_cart_available()
               tasks.add_product_to_cart(2);         snap("03-after-add")
               tasks.open_cart();                    snap("04-cart")
+              counts["cart_displayed"]   = cart.is_cart_displayed()
+              counts["cart_is_empty"]    = cart.is_empty()
+              counts["cart_has_total"]   = cart.has_total()
+              counts["checkout_offered"] = cart.is_checkout_available()
 
               results["006_reference_flow"] = {"counts": counts, "steps": steps}
-              # Assert the TRANSITION, not one leg of an or.
+              # Assert the TRANSITION at every phase, not one leg of an or.
               assert counts["catalog_products"] > 0, "catalog rendered no products"
               assert counts["detail_add_available"], "detail screen offered no add-to-cart"
+              assert counts["cart_displayed"], "cart screen never rendered"
+              assert not counts["cart_is_empty"], "cart reported empty after adding a product"
+              assert counts["cart_has_total"], "cart showed no total"
+              assert counts["checkout_offered"], "populated cart offered no checkout"
               log.info("006 PASS")
           except Exception:
               failures.append("006_reference_flow"); results["006_reference_flow"] = {"error": traceback.format_exc()}

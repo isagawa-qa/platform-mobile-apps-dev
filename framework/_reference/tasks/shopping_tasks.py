@@ -10,6 +10,7 @@ from interfaces.mobile_interface import MobileInterface
 from _reference.screens.product_catalog_screen import ProductCatalogScreen
 from _reference.screens.product_detail_screen import ProductDetailScreen
 from _reference.screens.tab_bar_screen import TabBarScreen
+from _reference.screens.cart_screen import CartScreen
 from resources.utilities import autologger
 
 
@@ -35,6 +36,7 @@ class ShoppingTasks:
         self.catalog_screen = ProductCatalogScreen(mobile)
         self.product_detail_screen = ProductDetailScreen(mobile)
         self.tab_bar_screen = TabBarScreen(mobile)
+        self.cart_screen = CartScreen(mobile)
 
     # ==================== TASK METHODS ====================
 
@@ -83,5 +85,12 @@ class ShoppingTasks:
 
     @autologger.automation_logger("Task")
     def open_cart(self) -> None:
-        """Open the cart tab."""
-        self.tab_bar_screen.open_cart()
+        """Open the cart and wait for it to render.
+
+        The tap and the wait belong together: a Task is one domain operation,
+        and "the cart is open" is not true until the screen has rendered.
+        """
+        (self.tab_bar_screen
+            .open_cart())
+        (self.cart_screen
+            .wait_for_cart_visible())
