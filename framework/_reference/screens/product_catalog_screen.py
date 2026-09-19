@@ -25,25 +25,80 @@ class ProductCatalogScreen:
         self.mobile = mobile
 
     # ==================== LOCATORS (Class Constants) ====================
-    # Every value below appears verbatim in a live XCUITest session, taken from
-    # run 35327677124 on iPhone 16 Pro / iOS 18.6. No id is typed from memory.
+    # Every value below appears verbatim in a capture COMMITTED to this repo:
+    #   iOS     -> _captures/ios-catalog.xml        (pending - see README)
+    #   Android -> _captures/android-catalog.xml    (emulator-5554, API 34)
+    # No id is typed from memory. Read the capture, then write the constant.
     #
-    # Keys are "ios" only, never "default". A "default" key CLAIMS the id is
-    # shared with Android, and no Android capture exists to support that. Ids get
-    # promoted to "default" when an Android capture shows the same string.
+    # This screen is the worked example of what a platform-keyed locator is FOR.
+    # The same screen in the same product yields FOUR different cross-platform
+    # outcomes, and each one is handled differently:
+    #
+    #   1. SAME id on both       -> one "default" key (SCREEN_TITLE)
+    #   2. DIFFERENT id, same thing -> two keys (SCREEN_ROOT, PRODUCT_NAME, ...)
+    #   3. NO counterpart         -> the key that exists, and only that one
+    #                                (HEADER_TITLE: Android merges it into the logo)
+    #   4. TWO constants, ONE node -> both keys point at it, with a note saying why
+    #                                (PRODUCT_ITEM / PRODUCT_IMAGE on Android)
+    #
+    # A missing key raises rather than falling back - see locator() below.
 
-    SCREEN_ROOT = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Catalog-screen")}
-    HEADER_LOGO = {"ios": (AppiumBy.ACCESSIBILITY_ID, "AppLogo Icons")}
+    # 2. Different id, same element.
+    SCREEN_ROOT = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Catalog-screen"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Displays all products of catalog"),
+    }
+
+    # 3. No counterpart. iOS exposes the logo and the wordmark as two nodes;
+    # Android exposes ONE ImageView (resource-id mTvTitle) described as
+    # "App logo and name". HEADER_TITLE therefore stays iOS-only - inventing an
+    # Android key here would be the exact "id nobody looked at" the rule forbids.
+    HEADER_LOGO = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "AppLogo Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "App logo and name"),
+    }
     HEADER_TITLE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "AppTitle Icons")}
-    SCREEN_TITLE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "title")}
-    PRODUCT_ITEM = {"ios": (AppiumBy.ACCESSIBILITY_ID, "ProductItem")}
-    PRODUCT_IMAGE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Product Image")}
-    PRODUCT_NAME = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Product Name")}
-    PRODUCT_PRICE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Product Price")}
 
-    # PRODUCT_BY_NAME is deliberately absent. The capture shows every tile
-    # carrying the SAME generic identifier "Product Name" - the catalog has no
-    # per-product accessibility id, so a product cannot be selected by id at all.
+    # 1. Same id on both platforms, so the key collapses to "default". This is
+    # the ONLY promotion in this file, and it is promoted because two captures
+    # agree - not because the string looked generic enough to be shared.
+    SCREEN_TITLE = {"default": (AppiumBy.ACCESSIBILITY_ID, "title")}
+
+    # 4. Two constants, one node. On iOS the tile is a container ("ProductItem")
+    # holding a separate image. On Android the tile ViewGroup has no id, is not
+    # clickable, and the IMAGE is the tap target - so both constants resolve to
+    # the same node there. PRODUCT_ITEM stays the one used for tapping and
+    # counting on both platforms; the duplicate value is correct, not a typo.
+    PRODUCT_ITEM = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "ProductItem"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Product Image"),
+    }
+    PRODUCT_IMAGE = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Product Image"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Product Image"),
+    }
+
+    # 2. Different id, same element. Note Android says "Title" where iOS says
+    # "Name" - a reminder that these strings are the app authors' choices, not a
+    # convention, which is why they are read rather than guessed.
+    PRODUCT_NAME = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Product Name"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Product Title"),
+    }
+    PRODUCT_PRICE = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Product Price"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Product Price"),
+    }
+
+    # PRODUCT_PRICE is NOT promoted to "default" even though both captures show
+    # the same string, because the two were taken from different builds of the
+    # app rather than from one cross-platform run. Two keys carrying the same
+    # value assert exactly what was observed; "default" would assert more.
+
+    # PRODUCT_BY_NAME is deliberately absent. Both captures show every tile
+    # carrying the SAME generic identifier - "Product Name" on iOS, "Product
+    # Title" on Android, four times each - so the catalog has no per-product
+    # accessibility id and a product cannot be selected by id on either platform.
     # Selection is by index (open_product_at) or by visible label, and the design
     # sheet's predicate-expression placeholder is unshippable as written.
 

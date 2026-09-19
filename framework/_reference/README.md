@@ -109,14 +109,36 @@ different element ids on iOS and Android, so each constant maps a platform key t
 time. One test body then runs on both platforms.
 
 **Element ids are discovered, never typed from memory.** Every id in these screens appears
-verbatim in a live XCUITest page source — the same way the Selenium platform snapshots a
-page and extracts elements before a Page Object is written. `/qa-workflow` step 4 performs
-that discovery against the app under test and builds new screens from these patterns.
+verbatim in a page source committed under [`_captures/`](_captures/) — the same way the
+Selenium platform snapshots a page and extracts elements before a Page Object is written.
+`/qa-workflow` step 4 performs that discovery against the app under test and builds new
+screens from these patterns.
 
-**Only the keys a capture proves are present.** These screens carry `"ios"` keys and no
-`"default"` key, because only an iOS capture exists so far. A `"default"` key would assert
-that an id holds on a platform nobody has looked at. Android keys get added when an Android
-capture exists, not before.
+**Only the keys a capture proves are present.** Each constant carries exactly the platform
+keys that evidence supports — no more. A key for a platform nobody has looked at is a
+guess wearing the costume of a fact, and `locator()` raises rather than falling back, so
+the guess would surface as a confusing `NoSuchElement` far from its cause.
+
+The catalog screen is the worked example, because one screen in one product produced four
+different cross-platform outcomes:
+
+| Outcome | Handling | Example |
+|---|---|---|
+| Same id on both | one `"default"` key | `SCREEN_TITLE` — `title` on both |
+| Different id, same element | two keys | `SCREEN_ROOT`, `PRODUCT_NAME` (iOS "Name", Android "Title") |
+| No counterpart | only the key that exists | `HEADER_TITLE` — Android merges logo and wordmark into one node |
+| Two constants, one node | both keys point at it, with a note | `PRODUCT_ITEM` / `PRODUCT_IMAGE` — Android's tile has no id, so the image *is* the tile |
+
+Two keys holding the **same string** is not redundant and does not get collapsed to
+`"default"` on sight: `PRODUCT_PRICE` reads `Product Price` on both, but the captures came
+from two different builds rather than one cross-platform run, so two keys assert what was
+observed and `"default"` would assert more.
+
+**Coverage is partial, and says so.** The Android captures cover browse-and-open, so
+`cart_screen.py` and `tab_bar_screen.py` carry no `"android"` key at all and the reference
+test stays `@pytest.mark.ios`. The iOS ids are correct but rest on a CI run id rather than
+a committed capture — [`_captures/README.md`](_captures/README.md) records that gap
+explicitly rather than letting it read as complete.
 
 ---
 

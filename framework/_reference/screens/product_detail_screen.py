@@ -25,11 +25,22 @@ class ProductDetailScreen:
         self.mobile = mobile
 
     # ==================== LOCATORS (Class Constants) ====================
-    # Every value appears verbatim in a live XCUITest session, from run
-    # 35327677124 on iPhone 16 Pro / iOS 18.6.
+    # Every value appears verbatim in a capture COMMITTED to this repo:
+    #   iOS     -> _captures/ios-product-detail.xml      (pending - see README)
+    #   Android -> _captures/android-product-detail.xml  (emulator-5554, API 34)
     #
-    # "ios" keys only, never "default" - no Android capture exists to support a
-    # cross-platform claim.
+    # This screen shows the OTHER half of the platform-keyed design: the two
+    # platforms need different LOCATOR STRATEGIES, not just different strings.
+    # Android's product name carries no content-desc, so it is addressed by
+    # resource-id (AppiumBy.ID) while everything else uses ACCESSIBILITY_ID.
+    # That is why each key holds its own (by, value) pair rather than the screen
+    # declaring one strategy for all of its locators.
+    #
+    # Most constants below remain iOS-only. The Android capture was taken for
+    # browse-and-open, so it proves the image, the name and the Add To Cart
+    # button, and nothing else. The quantity stepper and the colour swatches are
+    # NOT absent from the Android app - they are absent from the EVIDENCE, which
+    # is a different claim and the only one this file is allowed to make.
 
     SCREEN_ROOT = {"ios": (AppiumBy.ACCESSIBILITY_ID, "ProductDetails-screen")}
     BACK_BUTTON = {"ios": (AppiumBy.ACCESSIBILITY_ID, "BackButton Icons")}
@@ -37,7 +48,25 @@ class ProductDetailScreen:
     DECREASE_QUANTITY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "SubtractMinus Icons")}
     QUANTITY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Amount")}
     INCREASE_QUANTITY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "AddPlus Icons")}
-    ADD_TO_CART_BUTTON = {"ios": (AppiumBy.ACCESSIBILITY_ID, "AddToCart")}
+    ADD_TO_CART_BUTTON = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "AddToCart"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Tap to add product to cart"),
+    }
+
+    # Android-only for now. iOS has no captured equivalent of either, so these
+    # carry one key and locator() will raise if the iOS flow reaches them - which
+    # is the intended outcome: a gap that announces itself beats one that
+    # silently resolves to the wrong platform's id.
+    PRODUCT_IMAGE = {"android": (AppiumBy.ACCESSIBILITY_ID, "Displays selected product")}
+
+    # WARNING - resource-id `productTV` is REUSED across screens in this app. On
+    # the CATALOG it is the "Products" heading (see product_catalog_screen's
+    # SCREEN_TITLE); here it is the product's name. An AppiumBy.ID lookup for
+    # productTV therefore matches on both screens and returns different meanings,
+    # so this locator is only safe once the detail screen is confirmed showing.
+    # That is exactly why is_detail_displayed() gates the read, and why the id
+    # was recorded WITH the screen it was captured on rather than on its own.
+    PRODUCT_NAME = {"android": (AppiumBy.ID, "com.saucelabs.mydemoapp.android:id/productTV")}
     COLOR_BLACK = {"ios": (AppiumBy.ACCESSIBILITY_ID, "BlackColorUnSelected Icons")}
     COLOR_BLUE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "BlueColorUnSelected Icons")}
     COLOR_GRAY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "GrayColorUnSelected Icons")}
@@ -106,3 +135,19 @@ class ProductDetailScreen:
     def get_price(self) -> str:
         """Read the displayed price."""
         return self.mobile.get_text(*self.locator("PRODUCT_PRICE"))
+
+    def get_product_name(self) -> str:
+        """Read the name of the product this screen is showing.
+
+        Exists so a test can prove the RIGHT product opened, not merely that a
+        detail screen appeared. Read the tile's name before tapping it, then
+        compare: an assertion that only checks "a detail screen is showing"
+        passes when the wrong tile was tapped, or when the tap landed on
+        something else that happens to render a detail screen.
+
+        Only call this once is_detail_displayed() is true. On Android the
+        underlying resource-id is shared with the catalog's heading, so on the
+        wrong screen this returns "Products" instead of failing - see the
+        WARNING on PRODUCT_NAME above.
+        """
+        return self.mobile.get_text(*self.locator("PRODUCT_NAME"))
