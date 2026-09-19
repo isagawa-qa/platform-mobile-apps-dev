@@ -1,0 +1,169 @@
+name: iOS interactive tunnel
+
+# Holds a booted iOS simulator + Appium server open behind a public tunnel so a
+# developer on a non-macOS host can drive real discovery against it. This is the
+# only free way to get an INTERACTIVE iOS session from Windows: CI normally runs
+# one shot, and discovery needs a session you can look at, decide, and tap.
+#
+# SECURITY - read before running.
+#   * The tunnel URL is an UNAUTHENTICATED Appium endpoint. Anyone holding it can
+#     create sessions and drive the simulator.
+#   * This repository is PUBLIC, so the workflow log is public, so the URL is
+#     public the moment it is printed. Treat it as disclosed, not secret.
+#   * Mitigations: permissions are dropped to nothing so GITHUB_TOKEN grants no
+#     rights; the runner is ephemeral and holds no secrets; the app under test is
+#     a public demo; the window is bounded and short by default.
+#   * Do NOT raise hold_minutes beyond what you are actively using, and do not
+#     point this at anything private.
+
+on:
+  workflow_dispatch:
+    inputs:
+      hold_minutes:
+        description: How long to hold the session open (max 240)
+        required: true
+        default: '30'
+
+permissions: {}
+
+jobs:
+  tunnel:
+    runs-on: macos-15
+    timeout-minutes: 250
+    env:
+      APPIUM_VERSION: 3.7.0
+      XCUITEST_DRIVER_VERSION: 12.12.4
+      APP_RELEASE_TAG: '2.2.2'
+      APP_ASSET: SauceLabs-Demo-App.Simulator.XCUITest.zip
+      APP_REPO: saucelabs/my-demo-app-ios
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick a bootable iPhone simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          xcodebuild -version > xcode-version.txt
+          XCODE_MAJOR="$(awk 'NR==1 {split($2, v, "."); print v[1]}' xcode-version.txt)"
+          MAX_IOS_MAJOR=99
+          if [ "${XCODE_MAJOR}" -le 16 ]; then MAX_IOS_MAJOR=18; fi
+          xcrun simctl list devices available --json > devices.json
+          python3 - <<PY
+          import json, os, re
+          cap = int("${MAX_IOS_MAJOR}")
+          data = json.load(open("devices.json"))
+          best = None
+          for runtime, devices in data["devices"].items():
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not m: continue
+              major, minor = int(m.group(1)), int(m.group(2))
+              if major > cap: continue
+              for d in devices:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      key = (major, minor)
+                      if best is None or key > best[0]:
+                          best = (key, d, f"{major}.{minor}")
+          if best is None:
+              raise SystemExit("no available iPhone simulator at or below iOS %d" % cap)
+          (_, device, version) = best
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("udid=%s\n" % device["udid"])
+              fh.write("name=%s\n" % device["name"])
+              fh.write("version=%s\n" % version)
+          print("selected:", device["name"], version, device["udid"])
+          PY
+
+      - name: Boot the simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      - name: Fetch the reference app
+        id: app
+        run: |
+          set -euo pipefail
+          curl -sSL --retry 3 -o app.zip \
+            "https://github.com/${APP_REPO}/releases/download/${APP_RELEASE_TAG}/${APP_ASSET}"
+          unzip -q app.zip -d app
+          APP_PATH="$(find app -maxdepth 2 -name '*.app' -print -quit)"
+          test -n "${APP_PATH}" || { echo "no .app in the release asset"; exit 1; }
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${APP_PATH}/Info.plist")"
+          echo "app_path=${PWD}/${APP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "bundle_id=${BUNDLE_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Appium and the XCUITest driver
+        run: |
+          set -euo pipefail
+          npm install -g "appium@${APPIUM_VERSION}"
+          appium driver install "xcuitest@${XCUITEST_DRIVER_VERSION}"
+          appium driver list --installed
+
+      - name: Pre-install the app on the simulator
+        run: xcrun simctl install "${{ steps.sim.outputs.udid }}" "${{ steps.app.outputs.app_path }}"
+
+      - name: Start Appium
+        run: |
+          set -euo pipefail
+          appium --port 4723 --address 0.0.0.0 --log appium.log --log-level info \
+                 --allow-cors &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:4723/status > /dev/null; then echo "appium up"; exit 0; fi
+            sleep 2
+          done
+          echo "appium did not become ready"; cat appium.log; exit 1
+
+      - name: Open the tunnel
+        id: tunnel
+        run: |
+          set -euo pipefail
+          brew install cloudflared
+          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4723 \
+            > cloudflared.log 2>&1 &
+          for i in $(seq 1 60); do
+            URL="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' cloudflared.log | head -1 || true)"
+            if [ -n "${URL}" ]; then break; fi
+            sleep 2
+          done
+          test -n "${URL}" || { echo "tunnel did not come up"; cat cloudflared.log; exit 1; }
+          curl -sf "${URL}/status" > /dev/null || { echo "tunnel up but Appium unreachable through it"; exit 1; }
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Session facts
+        run: |
+          cat <<FACTS
+          ================= APPIUM SESSION IS OPEN =================
+          remoteServerUrl : ${{ steps.tunnel.outputs.url }}
+          udid            : ${{ steps.sim.outputs.udid }}
+          deviceName      : ${{ steps.sim.outputs.name }}
+          platformVersion : ${{ steps.sim.outputs.version }}
+          app             : ${{ steps.app.outputs.app_path }}
+          bundleId        : ${{ steps.app.outputs.bundle_id }}
+          holding open for: ${{ inputs.hold_minutes }} minutes
+          ==========================================================
+          FACTS
+
+      - name: Hold the session open
+        run: |
+          set -euo pipefail
+          MINUTES=${{ inputs.hold_minutes }}
+          if [ "$MINUTES" -gt 240 ]; then MINUTES=240; fi
+          END=$(( $(date +%s) + MINUTES * 60 ))
+          while [ "$(date +%s)" -lt "$END" ]; do
+            if ! curl -sf http://127.0.0.1:4723/status > /dev/null; then
+              echo "Appium died"; tail -50 appium.log; exit 1
+            fi
+            sleep 30
+          done
+          echo "hold window elapsed"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-tunnel-logs
+          path: |
+            appium.log
+            cloudflared.log
+          if-no-files-found: warn
