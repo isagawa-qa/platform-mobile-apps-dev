@@ -6,7 +6,7 @@ name: iOS reference suite
 #
 # The asymmetry with Android is deliberate: iOS goes to CI because a Windows host
 # cannot run it at all, and Android stays local because a Windows host runs it for
-# free on WHPX. CI is not the better venue for iOS - it is the only venue.
+# free on WHPX. CI is not the better device_location for iOS - it is the only device_location.
 #
 # Every step carrying a run id is a REGRESSION GUARD. Removing it re-opens a
 # failure that actually happened.
@@ -148,7 +148,7 @@ jobs:
       # only what is genuinely runner-specific: the chosen simulator and the app.
       - name: Run the reference suite
         env:
-          MOBILE_VENUE_IOS: ci
+          MOBILE_DEVICE_LOCATION_IOS: ci
           IOS_UDID: ${{ steps.sim.outputs.udid }}
           IOS_DEVICE_NAME: ${{ steps.sim.outputs.name }}
           IOS_PLATFORM_VERSION: ${{ steps.sim.outputs.version }}

@@ -62,7 +62,7 @@ ACTION:
 
 - RESOLVE the platform entry:
   - Look up the chosen platform in environment_config.json → `platforms`
-  - Read its `venue` (may be an ${ENV:-default} expression — expand it)
+  - Read its `device_location` (may be an ${ENV:-default} expression — expand it)
   - Read `markers`, `family`, `default_app`
   - If the chosen app is not under `apps` → ASK user to add it
 
@@ -105,7 +105,7 @@ RETRY:
     "workflow": "catalog",
     "raw_requirement": "As a shopper, I want to add a product to my cart",
     "detected_platform": "ios",
-    "venue": "ci",
+    "device_location": "ci",
     "markers": ["ios"]
   }
 }
@@ -161,9 +161,9 @@ RETRY:
 
 1. Read `platforms` from `framework/resources/config/environment_config.json`
 2. Select the entry the user named; if none, fall back to `default_platform`
-3. Expand its `venue` expression (`${MOBILE_VENUE_IOS:-local}` → `local` unless set)
+3. Expand its `device_location` expression (`${MOBILE_DEVICE_LOCATION_IOS:-local}` → `local` unless set)
 4. Record `family`, `markers` and `default_app` into state — Step 4 needs the
-   markers to decorate the generated test, and Step 2 needs the venue
+   markers to decorate the generated test, and Step 2 needs the device location
 
 ---
 
@@ -175,7 +175,7 @@ RETRY:
   • Persona: shopper
   • Role: Shopper
   • App: demo_native
-  • Platform: ios (venue: ci, markers: ios)
+  • Platform: ios (device_location: ci, markers: ios)
   • Workflow: catalog
 ```
 
@@ -190,7 +190,7 @@ RETRY:
   AI extracts persona, asks for app, platform, workflow
       │
       ▼
-  Resolve platform entry + venue
+  Resolve platform entry + device_location
       │
       ▼
   Validate all fields

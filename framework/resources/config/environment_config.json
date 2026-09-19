@@ -19,7 +19,7 @@
   "platforms": {
     "android": {
       "family": "android", "markers": ["android"], "default_app": "demo_native",
-      "venue": "${MOBILE_VENUE_ANDROID:-local}",
+      "device_location": "${MOBILE_DEVICE_LOCATION_ANDROID:-local}",
       "local":  { "server_url": "http://127.0.0.1:4723",
                   "capabilities": { "platformName": "Android", "appium:automationName": "UiAutomator2", "appium:deviceName": "${ANDROID_DEVICE_NAME:-mobileqa_api34}", "appium:platformVersion": "${ANDROID_PLATFORM_VERSION:-14}", "appium:noReset": true, "appium:newCommandTimeout": 180, "appium:systemPort": 8200 } },
       "remote": { "server_url": "${ANDROID_APPIUM_URL:-http://127.0.0.1:4723}",
@@ -30,7 +30,7 @@
     },
     "android-web": {
       "family": "android", "markers": ["android", "web"], "default_app": null,
-      "venue": "${MOBILE_VENUE_ANDROID:-local}",
+      "device_location": "${MOBILE_DEVICE_LOCATION_ANDROID:-local}",
       "local":  { "server_url": "http://127.0.0.1:4723",
                   "capabilities": { "platformName": "Android", "appium:automationName": "UiAutomator2", "browserName": "Chrome", "appium:chromedriverAutodownload": true, "appium:deviceName": "${ANDROID_DEVICE_NAME:-mobileqa_api34}", "appium:platformVersion": "${ANDROID_PLATFORM_VERSION:-14}", "appium:systemPort": 8200 } },
       "remote": { "server_url": "${ANDROID_APPIUM_URL:-http://127.0.0.1:4723}",
@@ -41,7 +41,7 @@
     },
     "ios": {
       "family": "ios", "markers": ["ios"], "default_app": "demo_native",
-      "venue": "${MOBILE_VENUE_IOS:-local}",
+      "device_location": "${MOBILE_DEVICE_LOCATION_IOS:-local}",
       "local":  { "server_url": "http://127.0.0.1:4723", "requires_host_os": "darwin",
                   "capabilities": { "platformName": "iOS", "appium:automationName": "XCUITest", "appium:deviceName": "${IOS_DEVICE_NAME:-iPhone 15}", "appium:platformVersion": "${IOS_PLATFORM_VERSION:-18}", "appium:noReset": true, "appium:newCommandTimeout": 180, "appium:simulatorStartupTimeout": 300000, "appium:wdaLaunchTimeout": 600000, "appium:wdaStartupRetries": 2, "appium:wdaStartupRetryInterval": 20000, "appium:wdaLocalPort": 8100 } },
       "ci":     { "server_url": "http://127.0.0.1:4723", "requires_host_os": "darwin", "runner": "macos-15",
@@ -54,7 +54,7 @@
     },
     "ios-web": {
       "family": "ios", "markers": ["ios", "web"], "default_app": null,
-      "venue": "${MOBILE_VENUE_IOS:-local}",
+      "device_location": "${MOBILE_DEVICE_LOCATION_IOS:-local}",
       "local":  { "server_url": "http://127.0.0.1:4723", "requires_host_os": "darwin",
                   "capabilities": { "platformName": "iOS", "appium:automationName": "XCUITest", "browserName": "Safari", "appium:deviceName": "${IOS_DEVICE_NAME:-iPhone 15}", "appium:platformVersion": "${IOS_PLATFORM_VERSION:-18}", "appium:simulatorStartupTimeout": 300000, "appium:wdaLaunchTimeout": 600000, "appium:wdaStartupRetries": 2, "appium:wdaStartupRetryInterval": 20000, "appium:wdaLocalPort": 8100 } },
       "ci":     { "server_url": "http://127.0.0.1:4723", "requires_host_os": "darwin", "runner": "macos-15",

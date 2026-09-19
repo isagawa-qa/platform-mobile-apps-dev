@@ -26,16 +26,16 @@ Never proceed on an unprobed host and never assume an install succeeded.
 ### Derive
 
 Read `framework/resources/config/environment_config.json`. For every
-`platforms[*]` and every venue block inside it:
+`platforms[*]` and every device location block inside it:
 
 ```
-IF venue has requires_host_os AND it != host_os   -> IMPOSSIBLE on this host
-ELSE IF the tooling that venue implies is present -> RUNNABLE NOW
+IF device_location has requires_host_os AND it != host_os   -> IMPOSSIBLE on this host
+ELSE IF the tooling that device_location implies is present -> RUNNABLE NOW
 ELSE                                              -> REACHABLE AFTER INSTALL
 ```
 
 Read `requires_host_os` from the config. Do not hardcode which platform needs
-which OS — the config is the authority and it can gain venues.
+which OS — the config is the authority and it can gain device locations.
 
 ### Report
 
@@ -61,7 +61,7 @@ REACHABLE WITHOUT LOCAL TOOLING
 
 | Outcome | Action |
 |---------|--------|
-| At least one venue RUNNABLE NOW | Record it to state (below), continue to 1.1 |
+| At least one device location RUNNABLE NOW | Record it to state (below), continue to 1.1 |
 | None runnable, some reachable after install | **STOP.** Give the install steps for the cheapest path. Wait. On "continue", **re-probe** — do not trust that it worked |
 | None runnable and none reachable locally | **STOP.** This host cannot test locally at all. Name the `remote` and `cloud` routes and what each needs |
 
@@ -80,7 +80,7 @@ into `.claude/state/session_state.json`:
 }
 ```
 
-Step 8 writes the protocol. A protocol that names a venue this host cannot run is
+Step 8 writes the protocol. A protocol that names a device location this host cannot run is
 a defect — the protocol describes *this* installation, not the product in general.
 
 ### Ask — only what the probe cannot answer
@@ -89,18 +89,21 @@ Everything above is detected. **Ask only what is genuinely the user's and
 genuinely ambiguous.** A question you could have answered by looking reads as the
 tool not knowing its own environment.
 
-There are at most two:
+Apply that test to each thing setup needs to know and ask whatever survives it.
+Do not aim for a fixed number of questions — the count falls out of how much this
+particular host and repo already answer, and it is often zero. The two below are
+the ones that survive today; a new dimension in the config adds its own.
 
-**Q1 — Which do you test?** Skip it if only one target has any viable venue, or
-if `apps/` contains artifacts for exactly one platform (`.ipa`/`.app` → iOS,
-`.apk` → Android). Otherwise ask, and offer only targets with a viable venue.
+**Which do you test?** Skip it if only one target has any viable device location,
+or if `apps/` contains artifacts for exactly one platform (`.ipa`/`.app` → iOS,
+`.apk` → Android). Otherwise ask, offering only targets with a viable location.
 
-**Q2 — Which venue, per chosen target?** Skip it whenever exactly one venue is
+**Which device location, per chosen target?** Skip it whenever exactly one is
 viable — state the choice instead of asking it. Ask only when two or more are.
 
 Build the options from `environment_config.json`, never from a list kept here.
 A question set maintained in parallel with the config will disagree with it, and
-then setup offers venues that do not exist.
+then setup offers device locations that do not exist.
 
 Ask one at a time, and give each option what it costs, not just its name:
 
@@ -117,8 +120,8 @@ You have no Mac configured, so I'd suggest cloud.  Which?
 
 ### Record
 
-Write the answer to `.env` — `MOBILE_VENUE_IOS` / `MOBILE_VENUE_ANDROID`. These
-already drive `platforms[*].venue` in the config, so nothing new is introduced
+Write the answer to `.env` — `MOBILE_DEVICE_LOCATION_IOS` / `MOBILE_DEVICE_LOCATION_ANDROID`. These
+already drive `platforms[*].device_location` in the config, so nothing new is introduced
 and the choice survives the session.
 
 **If the variable is already set, do not ask at all.** Setting it directly is the
@@ -173,12 +176,12 @@ Verify `.claude/settings.local.json` has MCP servers enabled (if using MCP):
 
 | Dependency | Check | Action if Missing |
 |------------|-------|-------------------|
-| **Host capability** | **§ 1.0 probe recorded in state** | **Report, wait, RE-PROBE — loop until a venue is runnable** |
+| **Host capability** | **§ 1.0 probe recorded in state** | **Report, wait, RE-PROBE — loop until a device location is runnable** |
 | MCP servers | `.mcp.json` at repo root configured | Add config → restart |
 | Dependencies | Package manager files exist | Install dependencies |
 | MCP enabled | settings.local.json configured | Add enableAllProjectMcpServers |
 
-The host probe comes first. Installing dependencies for a venue this host can
+The host probe comes first. Installing dependencies for a device location this host can
 never run wastes the user's time and ends in a runtime failure that looks like a
 platform defect.
 

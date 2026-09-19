@@ -4,7 +4,7 @@ Pytest configuration and fixtures.
 Provides reusable fixtures for test execution:
 - driver: Appium session for the resolved device profile
 - config: the whole environment_config.json document, unexpanded
-- device: --platform resolved to one venue block, ${VAR} expanded
+- device: --platform resolved to one device_location block, ${VAR} expanded
 - test_users: Test user credentials
 - workflow_data: The calling workflow's test data from tests/{workflow}/data/
 - mobile: MobileInterface wrapper with all dependencies
@@ -47,16 +47,17 @@ logger = logging.getLogger("MobileInterface")
 
 CONFIG_PATH = PROJECT_ROOT / "framework" / "resources" / "config" / "environment_config.json"
 
-# Venue-level keys. They configure the venue; they are never W3C capabilities.
+# Device-location-level keys. They configure where the device is; they are
+# never W3C capabilities.
 _NON_CAPABILITY_KEYS = frozenset({
     "server_url", "requires_host_os", "runner", "credentials", "note",
-    "venue", "platformKey", "family", "markers", "default_app",
+    "device_location", "platformKey", "family", "markers", "default_app",
 })
 
 _VAR = re.compile(r"\$\{([A-Z0-9_]+)(?::-([^}]*))?\}")
 
 # Capabilities that by themselves decide which app the session launches. If a
-# venue block sets any of them, app resolution is skipped entirely.
+# device-location block sets any of them, app resolution is skipped entirely.
 _LAUNCH_KEYS = frozenset({"appium:app", "appium:bundleId", "appium:appPackage"})
 
 _PHASE_REPORT_KEY = pytest.StashKey[dict]()
@@ -107,7 +108,7 @@ def _expand_env(value):
     return _VAR.sub(sub, value)
 
 
-def _resolve_app_capabilities(config, app_name, family, venue):
+def _resolve_app_capabilities(config, app_name, family, device_location):
     """Map a platform's default_app to the capabilities that launch it.
 
     Without this the session attaches to whatever is already on the device and
@@ -115,7 +116,7 @@ def _resolve_app_capabilities(config, app_name, family, venue):
 
     Rules, in order:
       - No default_app (the -web platforms) means no app: those drive a browser.
-      - The cloud venue takes a provider app reference, never a local path.
+      - The cloud location takes a provider app reference, never a local path.
       - Otherwise a path wins and `appium:app` installs and launches it.
       - Only when there is no path does the identifier apply, launching an app
         already installed. Expansion is lazy for exactly this reason: app_id is
@@ -132,7 +133,7 @@ def _resolve_app_capabilities(config, app_name, family, venue):
         )
     entry = apps[app_name]
 
-    if venue == "cloud":
+    if device_location == "cloud":
         reference = _expand_env(entry.get("cloud", {}).get(family, ""))
         if not reference:
             pytest.fail(
@@ -172,8 +173,8 @@ def _build_options(profile):
     """Build the Appium options object for one resolved device profile.
 
     Capabilities live under the block's "capabilities" key - the nested shape the
-    config actually ships. Venue-level keys (server_url, requires_host_os,
-    runner, credentials) configure the venue and are never forwarded as W3C
+    config actually ships. Device-location-level keys (server_url, requires_host_os,
+    runner, credentials) say where the device is and are never forwarded as W3C
     capabilities.
 
     Every capability comes from config, so adding one is a config edit, never a
@@ -261,9 +262,9 @@ def config():
 
 @pytest.fixture(scope="session")
 def device(request, config):
-    """Resolve --platform to one venue block with ${VAR} expanded.
+    """Resolve --platform to one device_location block with ${VAR} expanded.
 
-    Failures are pytest.fail rather than ValueError: a misconfigured venue must
+    Failures are pytest.fail rather than ValueError: a misconfigured device_location must
     read as a setup failure with the fix in the message.
     """
     name = request.config.getoption("--platform") or config["default_platform"]
@@ -271,11 +272,11 @@ def device(request, config):
         pytest.fail(f"--platform {name!r} is not a key of platforms in {CONFIG_PATH}")
 
     platform = config["platforms"][name]
-    venue = _expand_env(platform["venue"])
-    block = platform.get(venue)
+    device_location = _expand_env(platform["device_location"])
+    block = platform.get(device_location)
     if not block or "note" in block:
         reason = block.get("note") if block else "block missing"
-        pytest.fail(f"platform {name!r} has no usable {venue!r} venue: {reason}")
+        pytest.fail(f"platform {name!r} has no usable {device_location!r} device_location: {reason}")
 
     required_os = block.get("requires_host_os")
     if required_os and sys.platform != required_os:
@@ -284,24 +285,24 @@ def device(request, config):
             if platform.get(v) and not platform[v].get("requires_host_os")
         ]
         pytest.fail(
-            f"platform {name!r} venue {venue!r} requires host OS {required_os!r} "
+            f"platform {name!r} device_location {device_location!r} requires host OS {required_os!r} "
             f"but this host is {sys.platform!r}. iOS tooling does not exist off "
-            f"macOS, so no amount of configuration makes this venue work here. "
-            f"Use a venue that reaches a machine which has it: "
+            f"macOS, so no amount of configuration makes this device_location work here. "
+            f"Use a device_location that reaches a machine which has it: "
             f"{', '.join(alternatives) or 'none configured'} — "
-            f"set the venue via the platform's venue variable in .env."
+            f"set the device_location via the platform's device_location variable in .env."
         )
 
     resolved = _expand_env(dict(block))
     resolved["platformKey"] = name
-    resolved["venue"] = venue
+    resolved["device_location"] = device_location
     resolved["family"] = platform.get("family", "")
     resolved["markers"] = platform.get("markers", [])
     resolved["default_app"] = platform.get("default_app")
 
-    # The app under test is a property of the platform, not of the venue block,
+    # The app under test is a property of the platform, not of the device_location block,
     # so it is resolved here and merged in. An explicit capability in config
-    # always wins: a venue that names its own app is making a deliberate
+    # always wins: a device_location that names its own app is making a deliberate
     # statement this must not overwrite.
     #
     # The explicit check comes FIRST and short-circuits resolution. Resolving
@@ -312,7 +313,7 @@ def device(request, config):
     if not _LAUNCH_KEYS & capabilities.keys():
         capabilities.update(
             _resolve_app_capabilities(
-                config, resolved["default_app"], resolved["family"], venue
+                config, resolved["default_app"], resolved["family"], device_location
             )
         )
     resolved["capabilities"] = capabilities
@@ -407,14 +408,14 @@ def pytest_html_report_title(report):
 def pytest_configure(config):
     """Add custom metadata to report header and auto-register markers."""
     platform_key = config.getoption("--platform") or ""
-    venue = device_name = automation = server = ""
+    device_location = device_name = automation = server = ""
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             document = json.load(f)
         platform_key = platform_key or document.get("default_platform", "")
         profile = document.get("platforms", {}).get(platform_key, {})
-        venue = _expand_env(profile.get("venue", ""))
-        block = profile.get(venue, {}) or {}
+        device_location = _expand_env(profile.get("device_location", ""))
+        block = profile.get(device_location, {}) or {}
         caps = block.get("capabilities", {})
         device_name = caps.get("appium:deviceName", "")
         automation = caps.get("appium:automationName", "")
@@ -425,7 +426,7 @@ def pytest_configure(config):
     config._metadata = {
         'Project': 'Isagawa QA Platform (Mobile)',
         'Platform': platform_key,
-        'Venue': venue,
+        'Device location': device_location,
         'Device': device_name,
         'Automation Name': automation,
         'Appium Server': server,

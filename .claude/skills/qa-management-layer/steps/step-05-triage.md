@@ -18,7 +18,7 @@ no network panel, and no DOM inspector. What you have:
 | 3 | Page source at failure | `artifacts/page_source/` — the tree as it actually was |
 | 4 | Current context + context list | `driver.context`, `driver.contexts` |
 | 5 | Element state | `is_element_displayed`, `is_element_enabled` |
-| 6 | Device and session facts | platform, device name, OS version, venue, session id |
+| 6 | Device and session facts | platform, device name, OS version, device location, session id |
 | 7 | Timing | how long the wait ran before it gave up |
 
 **The page source at failure is the single most valuable artifact.** Diff it
@@ -85,7 +85,7 @@ precisely because they look plausible.
 | Passes on retry, no code change | Flaky — record the timing, do not "fix" it silently |
 | Same error signature twice | Broken — a real fix is needed |
 | Different error each run | Environment instability — check device and Appium health |
-| Fails only in CI | Venue difference — compare the resolved capabilities |
+| Fails only in CI | Device Location difference — compare the resolved capabilities |
 
 A test that passes on retry is not a pass. Record it as flaky in the state file
 so the pattern is visible when it happens again.

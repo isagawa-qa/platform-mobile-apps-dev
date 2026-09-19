@@ -43,7 +43,7 @@ PRE-CHECK:
 SESSION START:
 - Create the session with `appium_session_management` (action=create). The app
   is launched by its capabilities. There is NO navigate step.
-- The device must be on an INTERACTIVE venue. For a device not on this host,
+- The device must be on an INTERACTIVE device_location. For a device not on this host,
   pass `remoteServerUrl`. CI cannot serve discovery - see step-02.md § I.
 - IF the app needs a reset between runs, that is a capability
   (appium:noReset / appium:fullReset), never a test-level action.

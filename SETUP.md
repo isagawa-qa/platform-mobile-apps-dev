@@ -60,7 +60,7 @@ through a remote Mac or a cloud device.
 **You do not have to work out which applies to you.** `/kernel/domain-setup`
 (Step 6) opens with a host capability probe: it detects the OS and the installed
 tooling, reads `requires_host_os` from the environment config, and prints exactly
-which platform-and-venue combinations this machine can run now, which need an
+which platform-and-device location combinations this machine can run now, which need an
 install, and which are impossible here. It loops until at least one is runnable.
 
 The sections below are the install detail that probe will point you at. Read the
@@ -96,7 +96,7 @@ from step 4b.2 onward.
 Optional-dependency warnings are fine.
 
 ### Running iOS locally, with no CI in the loop
-Set `platforms.ios.venue` to `local` (or leave `MOBILE_VENUE_IOS` unset — it
+Set `platforms.ios.device_location` to `local` (or leave `MOBILE_DEVICE_LOCATION_IOS` unset — it
 defaults to `local`), then:
 ```bash
 pytest -m ios --platform=ios
@@ -110,11 +110,11 @@ any of this.
 
 ### 4b.1 iOS on Windows
 There is no local Apple toolchain. Two supported routes:
-- Set `platforms.ios.venue` to `cloud` or `remote` and put credentials in `.env`.
+- Set `platforms.ios.device_location` to `cloud` or `remote` and put credentials in `.env`.
 - Or push to CI: `.github/workflows/ios-reference.yml` runs on a GitHub-hosted Mac.
 
-**Verify:** `python -c "import json;d=json.load(open('framework/resources/config/environment_config.json'));print(d['platforms']['ios']['venue'])"`
-→ prints the venue expression.
+**Verify:** `python -c "import json;d=json.load(open('framework/resources/config/environment_config.json'));print(d['platforms']['ios']['device_location'])"`
+→ prints the device location expression.
 
 ### 4b.2 JDK 17
 **Verify:** `java -version` → `openjdk version "17.x"`
