@@ -50,8 +50,8 @@
   "apps": {
     "demo_native": {
       "android": {
-        "path": "apps/<android-native>.apk",
-        "app_id": "<android.package.id>"
+        "path": "${ANDROID_APP_PATH:-apps/mda-2.2.0-25.apk}",
+        "app_id": "${ANDROID_APP_ID:-com.saucelabs.mydemoapp.android}"
       },
       "ios": {
         "path": "${IOS_APP_PATH:-apps/SauceLabs-Demo-App.app}",

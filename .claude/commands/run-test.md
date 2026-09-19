@@ -8,7 +8,12 @@ Execute tests following the testing skill protocol.
 
 ## Kernel Loop Integration
 
-1. **Anchor if needed:** If `/kernel/anchor` hasn't run yet this session, invoke it first. Otherwise proceed; the hook forces a re-anchor every 30 actions.
+1. **Do NOT invoke `/kernel/anchor` here.** Anchoring is hook-driven, not a
+   command's concern: `universal-gate-enforcer.py` blocks when `anchored` is
+   false and again past the action limit, and `/kernel/session-start` sets
+   `anchored: false` on a fresh session precisely so the hook forces one.
+   Anchor when the hook asks, with the token it issues - never on entry,
+   which spends actions on a re-centre the counter did not ask for.
 2. **On failure:** Invoke `/kernel/fix` then `/kernel/learn` after any fix
 3. **On completion:** Invoke `/kernel/complete` when tests pass
 
