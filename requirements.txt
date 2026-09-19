@@ -1,3 +1,17 @@
+# Python dependencies, installed with: pip install -r requirements.txt
+#
+# THIS FILE IS NOT THE WHOLE DEPENDENCY LIST. pip installs Python packages; the
+# platform also needs a JDK, Node, the Appium server, an Appium driver and - for
+# Android - parts of the Android SDK. None of those are pip-installable.
+#
+# They are declared in framework/resources/config/environment_config.json under
+# `tooling`, which is the single source of truth: it carries each tool's probe
+# command, its pinned or minimum version, and its install line. Every device
+# location lists what it needs in its own `requires` array, and
+# /kernel/domain-setup step 1 probes exactly those.
+#
+# Do not restate a version here or in SETUP.md. If they disagree, the config wins.
+
 Appium-Python-Client==6.0.6
 selenium>=4.37.0,<5.0
 python-dotenv>=1.0.0

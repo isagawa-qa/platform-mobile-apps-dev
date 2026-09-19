@@ -25,7 +25,8 @@
     },
     "android_sdk": {
       "probe": "adb --version",
-      "env": "ANDROID_HOME"
+      "env": "ANDROID_HOME",
+      "why": "platform-tools: device communication"
     },
     "xcode": {
       "probe": "xcrun simctl list runtimes",
@@ -45,6 +46,12 @@
       "pin": "1.94.1",
       "probe": "npx appium-mcp@1.94.1 --version",
       "why": "the discovery server wired in .mcp.json"
+    },
+    "android_build_tools": {
+      "probe": "aapt2 version",
+      "env": "ANDROID_HOME",
+      "why": "Appium reads the APK manifest with aapt2 whenever a session launches by appium:app. adb --version passes without it, so it needs its own probe.",
+      "install": "sdkmanager \"build-tools;34.0.0\""
     }
   },
   "apps": {
@@ -92,7 +99,8 @@
           "java",
           "appium",
           "driver:uiautomator2",
-          "android_sdk"
+          "android_sdk",
+          "android_build_tools"
         ],
         "capabilities": {
           "platformName": "Android",
@@ -149,7 +157,8 @@
           "java",
           "appium",
           "driver:uiautomator2",
-          "android_sdk"
+          "android_sdk",
+          "android_build_tools"
         ],
         "capabilities": {
           "platformName": "Android",

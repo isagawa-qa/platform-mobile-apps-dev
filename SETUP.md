@@ -132,11 +132,22 @@ There is no local Apple toolchain. Two supported routes:
 ### 4b.3 Android SDK command-line tools
 **Verify:** `sdkmanager --version` → a version line
 
-### 4b.4 Platform tools
+### 4b.4 Platform tools AND build-tools
 ```bash
-sdkmanager "platform-tools" "platforms;android-34"
+sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 ```
 **Verify:** `adb version` → `Android Debug Bridge version 1.0.x`
+**Verify:** `aapt2 version` → a version line
+
+`build-tools` is not optional and `adb version` will not tell you it is missing.
+Appium reads the APK manifest with `aapt2` whenever a session launches by
+`appium:app`, to learn the package and launchable activity. Without it a session
+fails with `Could not find 'aapt2.exe'` — after the emulator has booted and the
+app has installed, so everything up to that point looks healthy.
+
+If you install it after starting Appium, **restart the Appium server**:
+`appium-adb` resolves the SDK layout once at startup and will keep reporting the
+binary as missing until it rescans.
 
 ### 4b.5 A system image with Google APIs
 ```bash
@@ -186,9 +197,12 @@ appium --port 4723 --log appium.log --log-level info
 Copy `.env.example` to `.env` and fill the keys you need.
 **Verify:** `ls .env` → the file exists. It is git-ignored and must stay so.
 
-> **Android is currently deferred** by owner decision so the iOS path can be
-> proven first. The preflight above is documented and correct; it has not yet
-> been exercised end to end on this platform.
+> **Android remains lower priority than iOS** by owner decision, but this
+> preflight HAS now been exercised end to end on a Windows host: JDK 17, the SDK
+> with build-tools, an API 34 google_apis AVD on WHPX, Appium 3.7.0 with
+> uiautomator2 8.7.0, and a `/qa-workflow` run that discovered Android ids live
+> and generated a working Screen/Task/Role/Test set. Step 4b.4's build-tools note
+> exists because that run is what found it missing.
 
 ---
 
