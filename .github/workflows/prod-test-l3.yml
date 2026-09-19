@@ -1,0 +1,244 @@
+name: prod-test L3
+
+# The LIVE half of /kernel/prod-test. L3 forbids mocks and requires a real
+# target; for a mobile platform that target is a device, and iOS cannot be
+# containerised, so the live target is the simulator on this runner.
+#
+# This is batch, not interactive, which is why it belongs in CI. Interactive
+# discovery (/qa-workflow) needs a session you can hold open and interrogate and
+# does NOT belong here - see .claude/skills/qa-management-layer/steps/step-02.md
+# section I.
+#
+# Everything that must stay alive for the run shares ONE step. A background
+# process is not guaranteed to outlive the step whose shell started it.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  l3:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      APPIUM_VERSION: 3.7.0
+      XCUITEST_DRIVER_VERSION: 12.12.4
+      APP_RELEASE_TAG: '2.2.2'
+      APP_ASSET: SauceLabs-Demo-App.Simulator.XCUITest.zip
+      APP_REPO: saucelabs/my-demo-app-ios
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick a bootable iPhone simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          xcodebuild -version > xcode-version.txt
+          XCODE_MAJOR="$(awk 'NR==1 {split($2, v, "."); print v[1]}' xcode-version.txt)"
+          MAX_IOS_MAJOR=99
+          if [ "${XCODE_MAJOR}" -le 16 ]; then MAX_IOS_MAJOR=18; fi
+          xcrun simctl list devices available --json > devices.json
+          python3 - <<PY
+          import json, os, re
+          cap = int("${MAX_IOS_MAJOR}")
+          data = json.load(open("devices.json"))
+          best = None
+          for runtime, devices in data["devices"].items():
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not m: continue
+              major, minor = int(m.group(1)), int(m.group(2))
+              if major > cap: continue
+              for d in devices:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      key = (major, minor)
+                      if best is None or key > best[0]:
+                          best = (key, d, f"{major}.{minor}")
+          if best is None:
+              raise SystemExit("no available iPhone simulator at or below iOS %d" % cap)
+          (_, device, version) = best
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("udid=%s\n" % device["udid"])
+              fh.write("name=%s\n" % device["name"])
+              fh.write("version=%s\n" % version)
+          print("selected:", device["name"], version, device["udid"])
+          PY
+
+      - name: Boot the simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      - name: Fetch the app under test
+        id: app
+        run: |
+          set -euo pipefail
+          curl -sSL --retry 3 -o app.zip \
+            "https://github.com/${APP_REPO}/releases/download/${APP_RELEASE_TAG}/${APP_ASSET}"
+          unzip -q app.zip -d app
+          APP_PATH="$(find app -maxdepth 2 -name '*.app' -print -quit)"
+          test -n "${APP_PATH}" || { echo "no .app in the release asset"; exit 1; }
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${APP_PATH}/Info.plist")"
+          echo "app_path=${PWD}/${APP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "bundle_id=${BUNDLE_ID}" >> "$GITHUB_OUTPUT"
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "${APP_PATH}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the platform's own dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip show Appium-Python-Client | head -2
+
+      - name: Install Appium and the XCUITest driver
+        run: |
+          set -euo pipefail
+          npm install -g "appium@${APPIUM_VERSION}"
+          appium driver install "xcuitest@${XCUITEST_DRIVER_VERSION}"
+          appium driver list --installed
+
+      - name: Write the device config, start Appium, run L3
+        id: l3
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+          DEVICE_NAME: ${{ steps.sim.outputs.name }}
+          PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
+          BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
+          APP_PATH: ${{ steps.app.outputs.app_path }}
+        run: |
+          set -uo pipefail
+          mkdir -p _test/device _test/results
+          python3 - <<PY
+          import json, os, pathlib
+          pathlib.Path("_test/device/test_config.json").write_text(json.dumps({
+              "server_url": "http://127.0.0.1:4723",
+              "platform": "ios",
+              "device_location": "ci",
+              "udid": os.environ["UDID"],
+              "device_name": os.environ["DEVICE_NAME"],
+              "platform_version": os.environ["PLATFORM_VERSION"],
+              "bundle_id": os.environ["BUNDLE_ID"],
+              "app": os.environ["APP_PATH"],
+          }, indent=2), encoding="utf-8")
+          PY
+
+          appium --port 4723 --log appium.log --log-level info &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:4723/status > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:4723/status > /dev/null || {
+            echo "Appium never became ready"; cat appium.log; exit 1; }
+          echo "Appium ready"
+
+          # The L3 body is inline, not a file in the repo: the platform's tree
+          # mirrors platform-selenium and gains no directory the template lacks.
+          PYTHONPATH=framework python3 - <<'L3'
+          import json, logging, pathlib, sys, traceback
+          from appium import webdriver
+          from appium.options.ios import XCUITestOptions
+          from appium.webdriver.common.appiumby import AppiumBy
+          from interfaces.mobile_interface import MobileInterface
+          from _reference.roles.shopper import Shopper
+          from _reference.screens.product_catalog_screen import ProductCatalogScreen
+          from _reference.screens.product_detail_screen import ProductDetailScreen
+
+          logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+          log = logging.getLogger("L3")
+          cfg = json.loads(pathlib.Path("_test/device/test_config.json").read_text(encoding="utf-8"))
+          results, failures = {}, []
+
+          def build_session():
+              o = XCUITestOptions()
+              for k, v in [("platformName", "iOS"),
+                           ("appium:automationName", "XCUITest"),
+                           ("appium:udid", cfg["udid"]),
+                           ("appium:deviceName", cfg["device_name"]),
+                           ("appium:platformVersion", cfg["platform_version"]),
+                           ("appium:bundleId", cfg["bundle_id"]),
+                           ("appium:newCommandTimeout", 300)]:
+                  o.set_capability(k, v)
+              return webdriver.Remote(cfg["server_url"], options=o)
+
+          # ---- 004: a real session opens, and page source comes back ----------
+          drv = None
+          try:
+              drv = build_session()
+              src = drv.page_source
+              results["004_session"] = {"session_id": drv.session_id,
+                                        "page_source_bytes": len(src)}
+              pathlib.Path("_test/results/004-page-source.xml").write_text(src, encoding="utf-8")
+              assert len(src) > 500, "page source implausibly small"
+              log.info("004 PASS")
+          except Exception:
+              failures.append("004_session"); results["004_session"] = {"error": traceback.format_exc()}
+          finally:
+              if drv: drv.quit()
+
+          # ---- 005: the real MobileInterface drives the real app --------------
+          drv = None
+          try:
+              drv = build_session()
+              m = MobileInterface(drv, cfg, log, "ios")
+              r = {"tab_bar_displayed": m.is_element_displayed(AppiumBy.ACCESSIBILITY_ID, "Catalog-tab-item"),
+                   "contexts": m.get_contexts(),
+                   "page_source_bytes": len(m.get_page_source())}
+              items = m.find_elements(AppiumBy.ACCESSIBILITY_ID, "ProductItem")
+              r["product_items"] = len(items)
+              if items:
+                  # the two methods added because the reference was touching raw WebElements
+                  r["first_product_name"] = m.get_text_at(AppiumBy.ACCESSIBILITY_ID, "Product Name", index=0)
+              results["005_interface"] = r
+              assert r["product_items"] > 0, "catalog rendered no ProductItem"
+              assert r.get("first_product_name"), "get_text_at returned nothing"
+              log.info("005 PASS")
+          except Exception:
+              failures.append("005_interface"); results["005_interface"] = {"error": traceback.format_exc()}
+          finally:
+              if drv: drv.quit()
+
+          # ---- 006: the SHIPPED Screen/Task/Role chain drives the real app ----
+          drv = None
+          try:
+              drv = build_session()
+              m = MobileInterface(drv, cfg, log, "ios")
+              catalog, detail = ProductCatalogScreen(m), ProductDetailScreen(m)
+              Shopper(m).add_product_to_cart(0, 2)
+              r = {"product_count": catalog.product_count(),
+                   "add_to_cart_available": detail.is_add_to_cart_available()}
+              results["006_reference_flow"] = r
+              assert r["product_count"] > 0 or r["add_to_cart_available"],                   "the Role ran but no Screen state-check reported a usable state"
+              log.info("006 PASS")
+          except Exception:
+              failures.append("006_reference_flow"); results["006_reference_flow"] = {"error": traceback.format_exc()}
+          finally:
+              if drv: drv.quit()
+
+          report = {"deliverable": "platform-mobile-apps",
+                    "infra_type": "device-ci",
+                    "target": cfg["server_url"],
+                    "device": f'{cfg["device_name"]} / iOS {cfg["platform_version"]}',
+                    "results": results,
+                    "failures": failures,
+                    "verdict": "FAIL" if failures else "PASS"}
+          pathlib.Path("_test/validation-report.json").write_text(
+              json.dumps(report, indent=2, default=str), encoding="utf-8")
+          print(json.dumps(report, indent=2, default=str))
+          sys.exit(1 if failures else 0)
+          L3
+
+      - name: Upload L3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-test-l3-evidence
+          path: |
+            _test/
+            appium.log
+          if-no-files-found: warn
