@@ -129,12 +129,13 @@ def main():
     domain = session_state.get('domain')
     if domain:
         domain_state = read_state(get_domain_state_file(domain))
-        if not domain_state.get('anchored'):
-            smart_block(
-                missing="Protocol not anchored",
-                fix_command="/kernel/anchor",
-                fix_description="This reads protocol and updates state"
-            )
+        # Gate 3 (anchored flag) REMOVED. The action counter below is the ONLY
+        # anchor trigger. Blocking on a boolean as well meant a fresh session
+        # had to anchor before doing anything, which is a second trigger for one
+        # control - and drift accumulates with actions, not with session
+        # boundaries. /kernel/session-start now reads protocol and lessons
+        # itself, so a new session still starts with that context without
+        # spending an anchor cycle to get it.
 
         # Gate 4: Action limit (Write, Edit, Bash all count)
         # AUTO-INCREMENT: Hook increments counter, not agent

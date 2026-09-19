@@ -27,18 +27,24 @@ Check state and resume if needed. Always invoke first.
    }
    ```
 
-5. **Force anchor on fresh start:**
+5. **Load protocol context (do NOT force an anchor):**
 
-   If NOT resuming from restart (i.e., `needs_restart` was false or missing):
-   - Set `anchored: false` in domain_workflow.json (if domain exists)
-   - This ensures hook blocks until anchor is invoked
+   Read, with the Read tool:
+   - `.claude/protocols/[domain]-protocol.md` and every reference it indexes
+   - `.claude/lessons/lessons.md`
 
-   ```json
-   // In [domain]_workflow.json:
-   {
-     "anchored": false
-   }
-   ```
+   Summarise the architecture patterns, naming conventions, quality gates and
+   anti-patterns that bear on the work ahead.
+
+   **Do NOT set `anchored: false`.** The action counter is the ONLY anchor
+   trigger. Forcing an anchor at session start was a second trigger for one
+   control, and drift accumulates with actions rather than with session
+   boundaries - a session that does three things does not need a re-centre
+   before doing them. Reading protocol and lessons HERE is what that forced
+   anchor was really for, and this gets it without spending an anchor cycle.
+
+   The hook blocks for an anchor when the counter passes `actions_limit`, and
+   issues a token with it. That is the only time to invoke `/kernel/anchor`.
 
 6. **Report and PROCEED (no asking):**
    ```
