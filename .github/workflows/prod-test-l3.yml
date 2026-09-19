@@ -108,11 +108,15 @@ jobs:
       - name: Write the device config, start Appium, run L3
         id: l3
         env:
-          UDID: ${{ steps.sim.outputs.udid }}
-          DEVICE_NAME: ${{ steps.sim.outputs.name }}
-          PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
-          BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
-          APP_PATH: ${{ steps.app.outputs.app_path }}
+          # These names are NOT free: environment_config.json's ios blocks read
+          # ${IOS_UDID}, ${IOS_DEVICE_NAME} and ${IOS_PLATFORM_VERSION}, none of
+          # which carry a default. Exporting UDID/DEVICE_NAME/PLATFORM_VERSION
+          # instead made _expand_env fail the run, correctly.
+          IOS_UDID: ${{ steps.sim.outputs.udid }}
+          IOS_DEVICE_NAME: ${{ steps.sim.outputs.name }}
+          IOS_PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
+          IOS_APP_PATH: ${{ steps.app.outputs.app_path }}
+          IOS_BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
         run: |
           set -uo pipefail
           mkdir -p _test/device _test/results
@@ -122,11 +126,11 @@ jobs:
               "server_url": "http://127.0.0.1:4723",
               "platform": "ios",
               "device_location": "ci",
-              "udid": os.environ["UDID"],
-              "device_name": os.environ["DEVICE_NAME"],
-              "platform_version": os.environ["PLATFORM_VERSION"],
-              "bundle_id": os.environ["BUNDLE_ID"],
-              "app": os.environ["APP_PATH"],
+              "udid": os.environ["IOS_UDID"],
+              "device_name": os.environ["IOS_DEVICE_NAME"],
+              "platform_version": os.environ["IOS_PLATFORM_VERSION"],
+              "bundle_id": os.environ["IOS_BUNDLE_ID"],
+              "app": os.environ["IOS_APP_PATH"],
           }, indent=2), encoding="utf-8")
           PY
 
