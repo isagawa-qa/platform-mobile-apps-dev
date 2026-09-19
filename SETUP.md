@@ -9,6 +9,16 @@ nothing under `.claude/` works until you do.
 
 ## Prerequisites (all hosts)
 
+> **The versions below are a convenience copy.** They are pinned in
+> `framework/resources/config/environment_config.json` under `tooling`, which is
+> the single source of truth — the CI workflows and the setup probe both read it.
+> If this table and the config ever disagree, **the config wins**, and
+> `/kernel/domain-setup` will say so with both values.
+>
+> You do not have to install from this table at all. Step 6 probes your host and
+> prints the exact commands for the tools your chosen setup actually needs — which
+> for a remote or cloud device is only Node.
+
 | Tool | Version | Verify | Expect |
 |---|---|---|---|
 | Python | 3.10+ | `python --version` | `Python 3.1x.x` |

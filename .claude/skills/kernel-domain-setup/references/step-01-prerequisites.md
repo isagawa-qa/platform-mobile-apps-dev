@@ -14,28 +14,57 @@ Never proceed on an unprobed host and never assume an install succeeded.
 
 ### Detect
 
-| Fact | How |
-|------|-----|
-| Host OS | `python -c "import sys; print(sys.platform)"` → `darwin`, `win32`, `linux` |
-| Node | `node --version` (22+ required by `appium-mcp`) |
-| Java | `java -version` |
-| Appium | `appium --version` |
-| Android SDK | `ANDROID_HOME` set, and `adb` / `emulator` on PATH |
-| iOS tooling | `xcrun simctl list runtimes` — macOS only, absent elsewhere |
+**Nothing about the toolchain is written here.** `environment_config.json` is the
+authority — read it and probe what it names. Anything restated in this file would
+be a second copy to drift.
+
+The host OS is the one fact the config does not hold:
+
+```
+host_os = python -c "import sys; print(sys.platform)"   ->  darwin | win32 | linux
+```
+
+For everything else, walk `tooling`. Each entry carries its own probe, and either
+a `pin` (an exact version) or a `min` (a floor):
+
+```
+FOR name, spec IN tooling:
+    IF spec.host_os AND spec.host_os != host_os:  skip - not applicable here
+    IF spec.env AND that variable is unset:       MISSING
+    run spec.probe
+      not found            -> MISSING
+      found, spec.pin      -> compare exactly;  mismatch -> WRONG VERSION
+      found, spec.min      -> compare floor;    below    -> WRONG VERSION
+      otherwise            -> OK
+
+FOR name, spec IN tooling.drivers:
+    `appium driver list --installed` -> compare against spec.pin
+```
+
+**A wrong version is not "present".** Reporting a tool as OK on presence alone
+lets setup pass and the failure surface later as something that looks like a
+platform defect. Report `WRONG VERSION` with both values and the install command,
+which is `spec.install` with `{pin}` substituted — never a version typed here.
 
 ### Derive
 
-Read `framework/resources/config/environment_config.json`. For every
-`platforms[*]` and every device location block inside it:
+For every `platforms[*]` and every device location block inside it:
 
 ```
-IF device_location has requires_host_os AND it != host_os   -> IMPOSSIBLE on this host
-ELSE IF the tooling that device_location implies is present -> RUNNABLE NOW
-ELSE                                              -> REACHABLE AFTER INSTALL
+IF the block has requires_host_os AND it != host_os  -> IMPOSSIBLE on this host
+ELSE IF every tool in the block's `requires` is OK   -> RUNNABLE NOW
+ELSE                                                 -> REACHABLE AFTER INSTALL
+                                                        (list the MISSING and
+                                                         WRONG VERSION entries)
 ```
 
-Read `requires_host_os` from the config. Do not hardcode which platform needs
-which OS — the config is the authority and it can gain device locations.
+`requires` names entries in `tooling`; `driver:x` means `tooling.drivers.x`.
+Both it and `requires_host_os` come from the config, so a new device location or
+a changed pin is picked up without editing this file.
+
+Note what `requires` makes visible: `remote` and `cloud` need only `node`. The
+heavy toolchain lives where the device is, not on this machine — which is the
+whole reason those locations exist for a host that cannot run the target.
 
 ### Report
 
