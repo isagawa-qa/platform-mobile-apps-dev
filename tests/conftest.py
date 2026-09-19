@@ -22,6 +22,7 @@ import sys
 import json
 import logging
 import pytest
+from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime
 
@@ -29,6 +30,13 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent
 FRAMEWORK_PATH = str(PROJECT_ROOT / "framework")
 sys.path.insert(0, FRAMEWORK_PATH)
+
+# Load .env before anything reads os.environ. Every ${VAR} in
+# environment_config.json resolves from here, and _expand_env's failure message
+# tells the user to "set it in .env" - which was untrue until this loaded it.
+# override=False so a real environment variable always beats the file: CI sets
+# IOS_UDID and friends for real, and a stale .env must not shadow them.
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options

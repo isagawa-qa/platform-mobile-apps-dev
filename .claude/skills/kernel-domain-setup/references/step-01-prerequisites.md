@@ -83,6 +83,48 @@ into `.claude/state/session_state.json`:
 Step 8 writes the protocol. A protocol that names a venue this host cannot run is
 a defect — the protocol describes *this* installation, not the product in general.
 
+### Ask — only what the probe cannot answer
+
+Everything above is detected. **Ask only what is genuinely the user's and
+genuinely ambiguous.** A question you could have answered by looking reads as the
+tool not knowing its own environment.
+
+There are at most two:
+
+**Q1 — Which do you test?** Skip it if only one target has any viable venue, or
+if `apps/` contains artifacts for exactly one platform (`.ipa`/`.app` → iOS,
+`.apk` → Android). Otherwise ask, and offer only targets with a viable venue.
+
+**Q2 — Which venue, per chosen target?** Skip it whenever exactly one venue is
+viable — state the choice instead of asking it. Ask only when two or more are.
+
+Build the options from `environment_config.json`, never from a list kept here.
+A question set maintained in parallel with the config will disagree with it, and
+then setup offers venues that do not exist.
+
+Ask one at a time, and give each option what it costs, not just its name:
+
+```
+iOS on this host can run two ways:
+
+  remote  — an Appium server on a Mac you can reach.
+            Free if you have one. Fast, interactive.
+  cloud   — a device-farm account.
+            Real devices, works from anywhere, costs per minute.
+
+You have no Mac configured, so I'd suggest cloud.  Which?
+```
+
+### Record
+
+Write the answer to `.env` — `MOBILE_VENUE_IOS` / `MOBILE_VENUE_ANDROID`. These
+already drive `platforms[*].venue` in the config, so nothing new is introduced
+and the choice survives the session.
+
+**If the variable is already set, do not ask at all.** Setting it directly is the
+supported override and the escape hatch if this step ever misbehaves: setup must
+never be the only way to configure the platform.
+
 ---
 
 ## MCP Servers (if applicable)
