@@ -148,6 +148,7 @@ jobs:
           from appium.webdriver.common.appiumby import AppiumBy
           from interfaces.mobile_interface import MobileInterface
           from _reference.roles.shopper import Shopper
+          from _reference.tasks.shopping_tasks import ShoppingTasks
           from _reference.screens.product_catalog_screen import ProductCatalogScreen
           from _reference.screens.product_detail_screen import ProductDetailScreen
 
@@ -205,17 +206,38 @@ jobs:
           finally:
               if drv: drv.quit()
 
-          # ---- 006: the SHIPPED Screen/Task/Role chain drives the real app ----
+          # ---- 006: walk the flow with the SHIPPED Task layer, capturing each
+          #           screen as evidence. Per-step captures are what let a
+          #           CartScreen be written at all - the evidence gate forbids a
+          #           locator that does not appear verbatim in a capture.
           drv = None
           try:
               drv = build_session()
               m = MobileInterface(drv, cfg, log, "ios")
               catalog, detail = ProductCatalogScreen(m), ProductDetailScreen(m)
-              Shopper(m).add_product_to_cart(0, 2)
-              r = {"product_count": catalog.product_count(),
-                   "add_to_cart_available": detail.is_add_to_cart_available()}
-              results["006_reference_flow"] = r
-              assert r["product_count"] > 0 or r["add_to_cart_available"],                   "the Role ran but no Screen state-check reported a usable state"
+              tasks = ShoppingTasks(m)
+              steps, counts = [], {}
+
+              def snap(label):
+                  src = m.get_page_source()
+                  pathlib.Path(f"_test/results/flow-{label}.xml").write_text(src, encoding="utf-8")
+                  n = {k: src.count(f'name="{k}"') for k in
+                       ("ProductItem", "AddToCart", "Catalog-screen", "Cart-tab-item")}
+                  steps.append({"step": label, "bytes": len(src), "marks": n})
+                  log.info("captured %s (%d bytes) %s", label, len(src), n)
+
+              snap("00-launch")
+              tasks.open_catalog();                 snap("01-catalog")
+              counts["catalog_products"] = catalog.product_count()
+              tasks.open_product(0);                snap("02-detail")
+              counts["detail_add_available"] = detail.is_add_to_cart_available()
+              tasks.add_product_to_cart(2);         snap("03-after-add")
+              tasks.open_cart();                    snap("04-cart")
+
+              results["006_reference_flow"] = {"counts": counts, "steps": steps}
+              # Assert the TRANSITION, not one leg of an or.
+              assert counts["catalog_products"] > 0, "catalog rendered no products"
+              assert counts["detail_add_available"], "detail screen offered no add-to-cart"
               log.info("006 PASS")
           except Exception:
               failures.append("006_reference_flow"); results["006_reference_flow"] = {"error": traceback.format_exc()}
