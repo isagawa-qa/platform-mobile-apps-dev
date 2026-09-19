@@ -10,10 +10,27 @@ substitute — build artifacts expire.
 
 ## What is here
 
-| File | Platform | Screen | Source |
-|---|---|---|---|
-| `android-catalog.xml` | Android | Product catalog | emulator-5554, API 34 (google_apis, x86_64), UiAutomator2 8.7.0, app `com.saucelabs.mydemoapp.android` |
-| `android-product-detail.xml` | Android | Product detail | same session, after tapping tile index 0 |
+All Android captures come from emulator-5554, API 34 (google_apis, x86_64),
+UiAutomator2 8.7.0, app `com.saucelabs.mydemoapp.android`.
+
+| File | Screen | State captured |
+|---|---|---|
+| `android-catalog.xml` | Product catalog | as launched |
+| `android-product-detail.xml` | Product detail | after tapping tile index 0 |
+| `android-cart.xml` | Cart | one product in the cart |
+| `android-cart-empty.xml` | Cart | after removing that product |
+| `android-menu.xml` | Navigation drawer | drawer open **over** the cart |
+
+Two of these exist for reasons worth copying:
+
+`android-cart-empty.xml` is a second capture of a screen already captured, because
+`EMPTY_MESSAGE` is asserted exactly when the cart is empty and a populated cart
+cannot prove what an empty one renders. Capture the state you assert, not only the
+state the happy path passes through.
+
+`android-menu.xml` is the drawer open over the cart, and it is the proof behind the
+warning in `AndroidNavigationScreen.is_menu_open()`: every element of the cart
+underneath is still reported `displayed="true"` while the drawer covers it.
 
 ## What is missing
 
@@ -25,10 +42,10 @@ than on evidence in the repo, which is exactly the gap this directory exists to
 close. Capture it on the next Mac run and drop it in as `ios-catalog.xml` and
 `ios-product-detail.xml`.
 
-The Android captures cover **browse and open a product** only. There is no
-Android capture of the cart or the tab bar, which is why `cart_screen.py` and
-`tab_bar_screen.py` carry no `"android"` key and `locator()` raises if an Android
-run reaches them.
+The Android captures now cover the whole reference flow — catalog, detail, cart
+(both states) and navigation — so all three shared screens carry both key sets.
+What they do **not** cover is checkout: nothing past `Proceed To Checkout` has
+been captured on either platform, so no checkout screen exists in this reference.
 
 ## How these were taken
 

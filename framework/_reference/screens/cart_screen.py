@@ -25,24 +25,56 @@ class CartScreen:
         self.mobile = mobile
 
     # ==================== LOCATORS (Class Constants) ====================
-    # Every value appears verbatim in a live XCUITest session, from run
-    # 35441567474 on iPhone 16 Pro / iOS 18.6, captured with two units of one
-    # product already in the cart.
+    # Every value appears verbatim in a capture COMMITTED to this repo:
+    #   iOS     -> _captures/ios-cart.xml           (pending - see README)
+    #   Android -> _captures/android-cart.xml       (one product in the cart)
+    #              _captures/android-cart-empty.xml (after removing it)
     #
-    # "ios" keys only, never "default" - no Android capture exists yet.
+    # The empty state needed its OWN capture. A populated cart cannot prove what
+    # an empty one shows, and EMPTY_MESSAGE is asserted against precisely when
+    # the cart is empty - so capturing only the state the happy path passes
+    # through would have left the one locator that matters untested.
 
-    SCREEN_ROOT = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Cart-screen")}
-    REMOVE_ITEM = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Remove Item")}
-    PROCEED_TO_CHECKOUT = {"ios": (AppiumBy.ACCESSIBILITY_ID, "ProceedToCheckout")}
-    TOTAL_LABEL = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Total:")}
-    EMPTY_MESSAGE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "No Items")}
+    SCREEN_ROOT = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Cart-screen"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Displays list of selected products"),
+    }
+    REMOVE_ITEM = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Remove Item"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Removes product from cart"),
+    }
+    PROCEED_TO_CHECKOUT = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "ProceedToCheckout"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Confirms products for checkout"),
+    }
+    TOTAL_LABEL = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Total:"),
+        "android": (AppiumBy.ID, "com.saucelabs.mydemoapp.android:id/totalPriceTV"),
+    }
+    # Both platforms render the SAME words, "No Items" - and the locators still
+    # differ in STRATEGY, not just in value: on iOS that string is the
+    # accessibility id, on Android it is only the visible text, with no
+    # content-desc at all, so it must be addressed by resource-id.
+    #
+    # This is the sharpest argument in the reference against any shared or
+    # fallback key. Two elements showing identical words can need entirely
+    # different means of being found, and a single key cannot express that. A
+    # locator is a claim about HOW an element is addressed on a given platform,
+    # never about what it says.
+    EMPTY_MESSAGE = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "No Items"),
+        "android": (AppiumBy.ID, "com.saucelabs.mydemoapp.android:id/noItemTitleTV"),
+    }
 
     # Deliberately ABSENT, and each for a reason the capture proves:
     #
-    #   line_item_count - "Remove Item" matches TWICE per row: the Button and
-    #   the StaticText nested inside it carry the same name. Counting by name
-    #   reports two line items for one. The app exposes no stable per-row id, so
-    #   a count method here would be confidently wrong.
+    #   line_item_count - on iOS "Remove Item" matches TWICE per row: the Button
+    #   and the StaticText nested inside it carry the same name, so counting by
+    #   name reports two line items for one. Android does NOT have this problem
+    #   - `removeBt` appears once per row - but the method stays absent anyway:
+    #   a shared method that is right on one platform and silently wrong on the
+    #   other is worse than no method, because the wrong answer is a number and
+    #   numbers get trusted.
     #
     #   item_total / grand_total - the totals render as StaticText whose NAME is
     #   the value itself ("2 Items", "$59.98"). A locator on those is a locator

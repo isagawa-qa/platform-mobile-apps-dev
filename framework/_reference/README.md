@@ -11,6 +11,7 @@
 | Layer | File to Read | Learn |
 |-------|--------------|-------|
 | **Screen** | `screens/product_catalog_screen.py` | Platform-keyed locators, atomic methods, state-check methods, return self |
+| **Screen (per-platform)** | `navigation/android_navigation_screen.py` | When platforms differ in SEQUENCE, not just ids — and why that belongs here |
 | **Task** | `tasks/shopping_tasks.py` | @autologger, Screen composition, no returns, fluent API |
 | **Role** | `roles/shopper.py` | @autologger, Task composition, workflow orchestration |
 | **Test** | `tests/test_e2e_browse_and_add_to_cart.py` | AAA pattern, fixtures, Role calls, Screen assertions |
@@ -62,11 +63,22 @@
 _reference/
 ├── README.md                                   ← You are here
 ├── __init__.py
-├── screens/
+├── _captures/                                  ← The evidence. Every id below is in here
+│   ├── README.md
+│   ├── android-catalog.xml
+│   ├── android-product-detail.xml
+│   ├── android-cart.xml
+│   ├── android-cart-empty.xml
+│   └── android-menu.xml
+├── screens/                                    ← SHARED across platforms
 │   ├── __init__.py
 │   ├── product_catalog_screen.py               ← Screen pattern (catalog)
 │   ├── product_detail_screen.py                ← Screen pattern (detail)
-│   └── tab_bar_screen.py                       ← Screen pattern (navigation)
+│   └── cart_screen.py                          ← Screen pattern (cart)
+├── navigation/                                 ← PER-PLATFORM. The one real divergence
+│   ├── __init__.py                             ← navigation_for(): resolves once
+│   ├── ios_navigation_screen.py                ← tab bar. Catalog = 1 tap
+│   └── android_navigation_screen.py            ← header + drawer. Catalog = 2 taps
 ├── tasks/
 │   ├── __init__.py
 │   └── shopping_tasks.py                       ← Task pattern (shopping)
@@ -77,6 +89,24 @@ _reference/
     ├── __init__.py
     └── test_e2e_browse_and_add_to_cart.py      ← Test pattern (integration)
 ```
+
+**Why `navigation/` is split and `screens/` is not.** The three screens are the
+same on both platforms — same elements, same order, different ids — so each is one
+class with a platform-keyed locator per constant. Navigation is not. iOS carries a
+persistent bottom tab bar, so reaching the catalog is one tap; Android puts the
+catalog inside a drawer behind a hamburger, so it is two. That is a difference in
+the **sequence of actions**, and `locator()` only swaps ids — it cannot make a
+method perform an extra tap.
+
+So the divergence is absorbed in the Screen layer, which is what that layer is for.
+`navigation_for()` picks the class once, when a Task is constructed, and is the only
+place in this reference that reads `mobile.platform` to decide behaviour. No Task,
+Role or Test branches on platform. Both classes expose the same method names, so
+`open_catalog()` reads identically either way.
+
+These are Screen Objects like any other — the `Screen` suffix marks the layer of the
+contract, not a claim to occupy the whole viewport. They model persistent chrome, the
+mobile counterpart of a Page Object for a site header.
 
 ---
 
@@ -124,21 +154,31 @@ different cross-platform outcomes:
 
 | Outcome | Handling | Example |
 |---|---|---|
-| Same id on both | one `"default"` key | `SCREEN_TITLE` — `title` on both |
 | Different id, same element | two keys | `SCREEN_ROOT`, `PRODUCT_NAME` (iOS "Name", Android "Title") |
+| Same id on both | **still** two keys | `SCREEN_TITLE`, `PRODUCT_PRICE` — identical strings, written twice |
 | No counterpart | only the key that exists | `HEADER_TITLE` — Android merges logo and wordmark into one node |
 | Two constants, one node | both keys point at it, with a note | `PRODUCT_ITEM` / `PRODUCT_IMAGE` — Android's tile has no id, so the image *is* the tile |
 
-Two keys holding the **same string** is not redundant and does not get collapsed to
-`"default"` on sight: `PRODUCT_PRICE` reads `Product Price` on both, but the captures came
-from two different builds rather than one cross-platform run, so two keys assert what was
-observed and `"default"` would assert more.
+**There is no `"default"` key and no fallback of any kind.** A key means "this id was
+observed on THIS platform", so one key cannot speak for a platform nobody captured — and
+the config defines four (`ios`, `android`, `ios-web`, `android-web`). Two keys holding an
+identical string are not redundant; they are two observations that happen to agree.
 
-**Coverage is partial, and says so.** The Android captures cover browse-and-open, so
-`cart_screen.py` and `tab_bar_screen.py` carry no `"android"` key at all and the reference
-test stays `@pytest.mark.ios`. The iOS ids are correct but rest on a CI run id rather than
-a committed capture — [`_captures/README.md`](_captures/README.md) records that gap
-explicitly rather than letting it read as complete.
+`CartScreen.EMPTY_MESSAGE` is why this matters rather than being pedantry. Both platforms
+render the same words, "No Items" — yet iOS exposes that string as the accessibility id
+while Android exposes it only as visible text, so the two need different *strategies*, not
+just different values. Matching text is not a shared locator, and a single key cannot tell
+the two cases apart.
+
+**Coverage is stated, not implied.** All three shared screens now carry both key sets,
+captured live. The iOS ids are correct but rest on a CI run id rather than a committed
+capture — [`_captures/README.md`](_captures/README.md) records that gap explicitly rather
+than letting it read as complete.
+
+**Capture the state you assert, not just the state you pass through.** `EMPTY_MESSAGE`
+needed its own capture (`android-cart-empty.xml`): a populated cart cannot prove what an
+empty one shows, and that locator is read precisely when the cart is empty. Capturing only
+the happy path would have left the one locator that matters unevidenced.
 
 ---
 

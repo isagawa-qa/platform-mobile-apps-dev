@@ -36,27 +36,82 @@ class ProductDetailScreen:
     # That is why each key holds its own (by, value) pair rather than the screen
     # declaring one strategy for all of its locators.
     #
-    # Most constants below remain iOS-only. The Android capture was taken for
-    # browse-and-open, so it proves the image, the name and the Add To Cart
-    # button, and nothing else. The quantity stepper and the colour swatches are
-    # NOT absent from the Android app - they are absent from the EVIDENCE, which
-    # is a different claim and the only one this file is allowed to make.
+    # The Android capture proves MORE than browse-and-open: the quantity
+    # stepper (minusIV / plusIV), the quantity value (noTV), the price (priceTV)
+    # and all four colour swatches are all in it. An earlier revision of this
+    # comment claimed otherwise, because the capture was searched only for the
+    # three ids that were about to be written instead of being read for
+    # everything it supported. Read the capture for what it HAS, not for what
+    # you already planned to write.
+    #
+    # Note two ids below use AppiumBy.ID rather than ACCESSIBILITY_ID: `noTV`
+    # and `priceTV` carry no content-desc at all, so there is no accessibility
+    # id to address them by. This is why the strategy travels inside each
+    # locator tuple instead of being declared once for the screen.
+    #
+    # SCREEN_ROOT is where "what identifies this screen" gets decided, and on
+    # Android that took measuring rather than picking. iOS has a real container,
+    # `ProductDetails-screen`. Android has none: `fragment_container` is on
+    # every screen in the app, so it identifies nothing.
+    #
+    # The obvious substitute is the hero image, `productIV` - and it is WRONG.
+    # Counted across all five committed captures:
+    #
+    #     content-desc                                    cart  menu  detail
+    #     "Displays selected product"   (productIV)          1     1      1   <- NOT unique
+    #     "Displays available colors..."(colorRV)            0     0      1
+    #     "Tap to add product to cart"  (cartBt)             0     0      1
+    #
+    # productIV is the line-item thumbnail on the cart and is still in the tree
+    # under the open drawer, so an is_detail_displayed() built on it returns
+    # True on two screens that are not the detail screen. It would pass every
+    # happy-path run and lie the moment a test checked from the wrong place.
+    #
+    # `cartBt` is used instead: unique across every capture, and semantically
+    # the thing that MAKES this a product detail screen - you can add this
+    # product to the cart from here and nowhere else. `colorRV` is also unique
+    # but was rejected as product-specific: a product with no colour options
+    # would not render it.
+    #
+    # The rule this encodes: an anchor must be verified unique ACROSS captures,
+    # not merely present in the one you are looking at. Presence in the right
+    # screen is half the check; absence from every other screen is the half
+    # that is easy to skip.
 
-    SCREEN_ROOT = {"ios": (AppiumBy.ACCESSIBILITY_ID, "ProductDetails-screen")}
+    SCREEN_ROOT = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "ProductDetails-screen"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Tap to add product to cart"),
+    }
     BACK_BUTTON = {"ios": (AppiumBy.ACCESSIBILITY_ID, "BackButton Icons")}
-    PRODUCT_PRICE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Price")}
-    DECREASE_QUANTITY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "SubtractMinus Icons")}
-    QUANTITY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "Amount")}
-    INCREASE_QUANTITY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "AddPlus Icons")}
+    PRODUCT_PRICE = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Price"),
+        "android": (AppiumBy.ID, "com.saucelabs.mydemoapp.android:id/priceTV"),
+    }
+    DECREASE_QUANTITY = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "SubtractMinus Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Decrease item quantity"),
+    }
+    QUANTITY = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "Amount"),
+        "android": (AppiumBy.ID, "com.saucelabs.mydemoapp.android:id/noTV"),
+    }
+    INCREASE_QUANTITY = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "AddPlus Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Increase item quantity"),
+    }
     ADD_TO_CART_BUTTON = {
         "ios": (AppiumBy.ACCESSIBILITY_ID, "AddToCart"),
         "android": (AppiumBy.ACCESSIBILITY_ID, "Tap to add product to cart"),
     }
 
-    # Android-only for now. iOS has no captured equivalent of either, so these
-    # carry one key and locator() will raise if the iOS flow reaches them - which
-    # is the intended outcome: a gap that announces itself beats one that
-    # silently resolves to the wrong platform's id.
+    # Android-only for now. iOS has no captured equivalent, so this carries one
+    # key and locator() will raise if the iOS flow reaches it - a gap that
+    # announces itself beats one that silently resolves to another platform's id.
+    #
+    # Do NOT use this to decide which screen is showing. The same content-desc
+    # is the line-item thumbnail on the cart and survives under the open drawer
+    # - see the SCREEN_ROOT note above. It is fine for asserting that an image
+    # is rendered once you already know where you are.
     PRODUCT_IMAGE = {"android": (AppiumBy.ACCESSIBILITY_ID, "Displays selected product")}
 
     # WARNING - resource-id `productTV` is REUSED across screens in this app. On
@@ -67,10 +122,22 @@ class ProductDetailScreen:
     # That is exactly why is_detail_displayed() gates the read, and why the id
     # was recorded WITH the screen it was captured on rather than on its own.
     PRODUCT_NAME = {"android": (AppiumBy.ID, "com.saucelabs.mydemoapp.android:id/productTV")}
-    COLOR_BLACK = {"ios": (AppiumBy.ACCESSIBILITY_ID, "BlackColorUnSelected Icons")}
-    COLOR_BLUE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "BlueColorUnSelected Icons")}
-    COLOR_GRAY = {"ios": (AppiumBy.ACCESSIBILITY_ID, "GrayColorUnSelected Icons")}
-    COLOR_GREEN = {"ios": (AppiumBy.ACCESSIBILITY_ID, "GreenColorUnSelected Icons")}
+    COLOR_BLACK = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "BlackColorUnSelected Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Black color"),
+    }
+    COLOR_BLUE = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "BlueColorUnSelected Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Blue color"),
+    }
+    COLOR_GRAY = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "GrayColorUnSelected Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Gray color"),
+    }
+    COLOR_GREEN = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "GreenColorUnSelected Icons"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "Green color"),
+    }
 
     def locator(self, name: str):
         """Resolve a platform-keyed locator constant for the current platform.

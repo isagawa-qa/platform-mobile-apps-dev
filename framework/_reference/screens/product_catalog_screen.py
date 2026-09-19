@@ -31,19 +31,23 @@ class ProductCatalogScreen:
     # No id is typed from memory. Read the capture, then write the constant.
     #
     # This screen is the worked example of what a platform-keyed locator is FOR.
-    # The same screen in the same product yields FOUR different cross-platform
+    # The same screen in the same product yields four different cross-platform
     # outcomes, and each one is handled differently:
     #
-    #   1. SAME id on both       -> one "default" key (SCREEN_TITLE)
-    #   2. DIFFERENT id, same thing -> two keys (SCREEN_ROOT, PRODUCT_NAME, ...)
-    #   3. NO counterpart         -> the key that exists, and only that one
-    #                                (HEADER_TITLE: Android merges it into the logo)
-    #   4. TWO constants, ONE node -> both keys point at it, with a note saying why
-    #                                (PRODUCT_ITEM / PRODUCT_IMAGE on Android)
+    #   1. DIFFERENT id, same element -> two keys (SCREEN_ROOT, PRODUCT_NAME)
+    #   2. SAME id on both            -> STILL two keys (SCREEN_TITLE,
+    #                                    PRODUCT_PRICE) - see below
+    #   3. NO counterpart             -> the key that exists, and only that one
+    #                                    (HEADER_TITLE: Android merges it in)
+    #   4. TWO constants, ONE node    -> both keys point at it, with a note
+    #                                    (PRODUCT_ITEM / PRODUCT_IMAGE)
     #
-    # A missing key raises rather than falling back - see locator() below.
+    # There is no "default" key and no fallback of any kind. A key means "this
+    # id was observed on THIS platform", so one key cannot speak for a platform
+    # nobody captured - and this app ships four (ios, android, ios-web,
+    # android-web). A missing key raises; see locator() below.
 
-    # 2. Different id, same element.
+    # 1. Different id, same element.
     SCREEN_ROOT = {
         "ios": (AppiumBy.ACCESSIBILITY_ID, "Catalog-screen"),
         "android": (AppiumBy.ACCESSIBILITY_ID, "Displays all products of catalog"),
@@ -59,10 +63,15 @@ class ProductCatalogScreen:
     }
     HEADER_TITLE = {"ios": (AppiumBy.ACCESSIBILITY_ID, "AppTitle Icons")}
 
-    # 1. Same id on both platforms, so the key collapses to "default". This is
-    # the ONLY promotion in this file, and it is promoted because two captures
-    # agree - not because the string looked generic enough to be shared.
-    SCREEN_TITLE = {"default": (AppiumBy.ACCESSIBILITY_ID, "title")}
+    # 2. Same id on both platforms - and it STILL gets two keys. Collapsing it
+    # to a single shared key would say "this id holds everywhere", which the
+    # evidence does not support: two captures were taken, on two platforms, from
+    # two different builds. Two keys say exactly what was seen, twice. The extra
+    # line is the price of not overstating what a capture proves.
+    SCREEN_TITLE = {
+        "ios": (AppiumBy.ACCESSIBILITY_ID, "title"),
+        "android": (AppiumBy.ACCESSIBILITY_ID, "title"),
+    }
 
     # 4. Two constants, one node. On iOS the tile is a container ("ProductItem")
     # holding a separate image. On Android the tile ViewGroup has no id, is not
@@ -78,7 +87,7 @@ class ProductCatalogScreen:
         "android": (AppiumBy.ACCESSIBILITY_ID, "Product Image"),
     }
 
-    # 2. Different id, same element. Note Android says "Title" where iOS says
+    # 1. Different id, same element. Note Android says "Title" where iOS says
     # "Name" - a reminder that these strings are the app authors' choices, not a
     # convention, which is why they are read rather than guessed.
     PRODUCT_NAME = {
@@ -90,10 +99,12 @@ class ProductCatalogScreen:
         "android": (AppiumBy.ACCESSIBILITY_ID, "Product Price"),
     }
 
-    # PRODUCT_PRICE is NOT promoted to "default" even though both captures show
-    # the same string, because the two were taken from different builds of the
-    # app rather than from one cross-platform run. Two keys carrying the same
-    # value assert exactly what was observed; "default" would assert more.
+    # PRODUCT_PRICE is the second case of matching strings, and it is written
+    # the same way for the same reason. Two keys carrying an identical value are
+    # not redundant - they are two observations that happen to agree. Compare
+    # CartScreen.EMPTY_MESSAGE, where both platforms render the same WORDS but
+    # need different strategies to address them: matching text is not a shared
+    # locator, and a single key cannot tell the two cases apart.
 
     # PRODUCT_BY_NAME is deliberately absent. Both captures show every tile
     # carrying the SAME generic identifier - "Product Name" on iOS, "Product
