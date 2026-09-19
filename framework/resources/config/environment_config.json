@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "default_platform": "android",
+  "default_platform": "ios",
   "explicit_wait": 20,
   "implicit_wait": 0,
   "artifacts": { "screenshot_dir": "artifacts/screenshots", "page_source_dir": "artifacts/page_source" },
