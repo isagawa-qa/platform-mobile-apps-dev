@@ -52,10 +52,19 @@ Release URLs and tags are in [`apps/README.md`](apps/README.md).
 
 **Verify:** `ls apps/*.app apps/*.apk` → at least one build present.
 
-## Step 4: Choose your host section
+## Step 4: Your host section
 
 macOS can run both platforms. Windows runs Android locally and reaches iOS
-through CI or a cloud device.
+through a remote Mac or a cloud device.
+
+**You do not have to work out which applies to you.** `/kernel/domain-setup`
+(Step 6) opens with a host capability probe: it detects the OS and the installed
+tooling, reads `requires_host_os` from the environment config, and prints exactly
+which platform-and-venue combinations this machine can run now, which need an
+install, and which are impossible here. It loops until at least one is runnable.
+
+The sections below are the install detail that probe will point you at. Read the
+one it names rather than the one you assume.
 
 ---
 
