@@ -103,76 +103,82 @@ jobs:
       - name: Pre-install the app on the simulator
         run: xcrun simctl install "${{ steps.sim.outputs.udid }}" "${{ steps.app.outputs.app_path }}"
 
-      - name: Start Appium
+      - name: Start Appium, open the tunnel, and hold
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+          DEVICE_NAME: ${{ steps.sim.outputs.name }}
+          PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
+          APP_PATH: ${{ steps.app.outputs.app_path }}
+          BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
+          HOLD_MINUTES: ${{ inputs.hold_minutes }}
         run: |
-          set -euo pipefail
-          appium --port 4723 --address 0.0.0.0 --log appium.log --log-level info \
-                 --allow-cors &
+          set -uo pipefail
+          # Appium, cloudflared and the hold live in ONE step deliberately. A
+          # previous revision started Appium with & in its own step and opened
+          # the tunnel in the next; by then Appium was gone. A background
+          # process is not guaranteed to outlive the step whose shell started
+          # it, so anything that must stay up for the hold starts here.
+          brew install cloudflared
+
+          appium --port 4723 --address 0.0.0.0 --log appium.log --log-level info                  --allow-cors &
+          APPIUM_PID=$!
           for i in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:4723/status > /dev/null; then echo "appium up"; exit 0; fi
+            curl -sf http://127.0.0.1:4723/status > /dev/null && break
             sleep 2
           done
-          echo "appium did not become ready"; cat appium.log; exit 1
+          if ! curl -sf http://127.0.0.1:4723/status > /dev/null; then
+            echo "Appium never became ready locally"; cat appium.log; exit 1
+          fi
+          echo "Appium up locally (pid ${APPIUM_PID})"
 
-      - name: Open the tunnel
-        id: tunnel
-        run: |
-          set -euo pipefail
-          brew install cloudflared
-          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4723 \
-            > cloudflared.log 2>&1 &
+          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4723             > cloudflared.log 2>&1 &
+          URL=""
           for i in $(seq 1 60); do
             URL="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' cloudflared.log | head -1 || true)"
-            if [ -n "${URL}" ]; then break; fi
+            [ -n "${URL}" ] && break
             sleep 2
           done
-          test -n "${URL}" || { echo "tunnel did not come up"; cat cloudflared.log; exit 1; }
-          echo "tunnel URL registered locally: ${URL}"
+          if [ -z "${URL}" ]; then
+            echo "tunnel never published a URL"; tail -40 cloudflared.log; exit 1
+          fi
 
-          # cloudflared prints the hostname BEFORE the edge finishes routing it,
-          # so the first request through it loses a race the tunnel then wins a
-          # few seconds later. Retry rather than treating one refusal as fatal.
+          # The edge takes a few seconds to route a freshly published hostname.
           READY=""
           for i in $(seq 1 45); do
             if curl -sf --max-time 5 "${URL}/status" > /dev/null; then READY=1; break; fi
             sleep 2
           done
           if [ -z "${READY}" ]; then
-            echo "tunnel up but Appium never became reachable through it after 90s"
-            echo "--- local Appium check ---"; curl -sv --max-time 5 http://127.0.0.1:4723/status 2>&1 | tail -20
-            echo "--- cloudflared ---";        tail -40 cloudflared.log
+            echo "tunnel published ${URL} but Appium unreachable through it after 90s"
+            echo "--- local appium ---";  curl -sS --max-time 5 http://127.0.0.1:4723/status || echo "(local Appium is DOWN)"
+            echo "--- cloudflared ---";   tail -40 cloudflared.log
             exit 1
           fi
-          echo "Appium reachable through the tunnel after ${i} attempt(s)"
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
-      - name: Session facts
-        run: |
           cat <<FACTS
           ================= APPIUM SESSION IS OPEN =================
-          remoteServerUrl : ${{ steps.tunnel.outputs.url }}
-          udid            : ${{ steps.sim.outputs.udid }}
-          deviceName      : ${{ steps.sim.outputs.name }}
-          platformVersion : ${{ steps.sim.outputs.version }}
-          app             : ${{ steps.app.outputs.app_path }}
-          bundleId        : ${{ steps.app.outputs.bundle_id }}
-          holding open for: ${{ inputs.hold_minutes }} minutes
+          remoteServerUrl : ${URL}
+          udid            : ${UDID}
+          deviceName      : ${DEVICE_NAME}
+          platformVersion : ${PLATFORM_VERSION}
+          app             : ${APP_PATH}
+          bundleId        : ${BUNDLE_ID}
+          holding open for: ${HOLD_MINUTES} minutes
           ==========================================================
           FACTS
 
-      - name: Hold the session open
-        run: |
-          set -euo pipefail
-          MINUTES=${{ inputs.hold_minutes }}
-          if [ "$MINUTES" -gt 240 ]; then MINUTES=240; fi
+          MINUTES=${HOLD_MINUTES}
+          [ "$MINUTES" -gt 240 ] && MINUTES=240
           END=$(( $(date +%s) + MINUTES * 60 ))
           while [ "$(date +%s)" -lt "$END" ]; do
-            if ! curl -sf http://127.0.0.1:4723/status > /dev/null; then
-              echo "Appium died"; tail -50 appium.log; exit 1
+            if ! curl -sf --max-time 5 "${URL}/status" > /dev/null; then
+              echo "session became unreachable through the tunnel"
+              curl -sS --max-time 5 http://127.0.0.1:4723/status || echo "(local Appium is DOWN too)"
+              tail -30 appium.log; tail -20 cloudflared.log; exit 1
             fi
             sleep 30
           done
-          echo "hold window elapsed"
+          echo "hold window elapsed cleanly"
 
       - name: Upload logs
         if: always()
