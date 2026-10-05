@@ -170,7 +170,7 @@ Host details: [`SETUP.md#prerequisites-all-hosts`](SETUP.md#prerequisites-all-ho
 ### Install
 
 ```bash
-git clone -b docs/engineer-readme https://github.com/isagawa-qa/platform-mobile-apps-dev.git
+git clone https://github.com/isagawa-qa/platform-mobile-apps-dev.git
 cd platform-mobile-apps-dev
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
@@ -188,23 +188,25 @@ Then complete your host section: [`SETUP.md#macos-host`](SETUP.md#macos-host) or
 
 ### Run
 
-Boot your simulator or emulator and the Appium server (per your host section), then from Claude Code:
+Boot your simulator or emulator and the Appium server (per your host section), then from Claude Code. The repo ships before domain setup (no protocol, no domain hooks yet), so the first two commands are both required, in this order:
 
 ```bash
 claude                  # start in the project directory
-> /kernel/session-start # initialize the session; restart to activate hooks
+> /kernel/session-start # initialize the session
+> /kernel/domain-setup  # generate the protocol and domain hooks; restart Claude Code when it says so
 > /qa-workflow          # generate your first test
 > /pr                   # review generated code against the architecture
 ```
 
+Details and the verify step: [`SETUP.md#step-6-run-kernelsession-start-then-kerneldomain-setup`](SETUP.md#step-6-run-kernelsession-start-then-kerneldomain-setup).
+
 ### Tests
 
 ```bash
-# Run the iOS reference suite (needs a reachable iOS simulator; this is what CI runs)
-pytest -m ios --platform=ios
+pytest -m ios --platform=ios           # iOS reference suite (reachable simulator; what CI runs)
+pytest -m android --platform=android   # Android reference suite (booted emulator/device + Appium)
 
-# No device yet? Confirm the project collects (no session opened)
-pytest --collect-only
+pytest --collect-only                  # no device yet: confirm the project collects (no session)
 ```
 
 The reference suite is documented at [`SETUP.md#step-7-run-the-reference-suite`](SETUP.md#step-7-run-the-reference-suite).
