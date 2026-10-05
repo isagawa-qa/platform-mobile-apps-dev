@@ -200,8 +200,8 @@ Copy `.env.example` to `.env` and fill the keys you need.
 > **Android remains lower priority than iOS** by owner decision, but this
 > preflight HAS now been exercised end to end on a Windows host: JDK 17, the SDK
 > with build-tools, an API 34 google_apis AVD on WHPX, Appium 3.7.0 with
-> uiautomator2 8.7.0, and a `/qa-workflow` run that discovered Android ids live
-> and generated a working Screen/Task/Role/Test set. Step 4b.4's build-tools note
+> uiautomator2 8.7.0, and a QA workflow run (see Next Steps) that discovered Android ids
+> live and generated a working Screen/Task/Role/Test set. Step 4b.4's build-tools note
 > exists because that run is what found it missing.
 
 ---
@@ -222,8 +222,8 @@ environment failure from a code failure.
 ### The discovery server
 
 `.mcp.json` wires [`appium-mcp`](https://github.com/appium/appium-mcp), the Appium
-project's own MCP server. It is what `/qa-workflow` step 4 drives to find elements
-in your app. It is the mobile counterpart of the Playwright MCP server the Selenium
+project's own MCP server. It is what the QA workflow's discovery step (available
+after Step 6) drives to find elements in your app. It is the mobile counterpart of the Playwright MCP server the Selenium
 platform uses, and it plays the same role: **it discovers; it does not generate.**
 Generated tests never go through it — they run through `tests/conftest.py` and
 `MobileInterface`.
