@@ -4,9 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![Appium](https://img.shields.io/badge/Appium-3.7.0-green)
 
-[![iOS Simulator PoC](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/ios-poc.yml/badge.svg)](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/ios-poc.yml)
 [![iOS reference suite](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/ios-reference.yml/badge.svg)](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/ios-reference.yml)
-[![iOS interactive tunnel](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/ios-tunnel.yml/badge.svg)](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/ios-tunnel.yml)
 [![prod-test L3](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/prod-test-l3.yml/badge.svg)](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions/workflows/prod-test-l3.yml)
 
 AI-powered Appium test automation for native and hybrid mobile apps, with a 5-layer architecture and runtime enforcement. Describe a requirement in plain English and the AI agent opens a live device session, discovers elements per platform, and generates Screen objects, Tasks, Roles, and Tests that follow strict separation of concerns. Every action is gated by the [Isagawa Kernel](https://github.com/isagawa-co/isagawa-kernel), so the agent can only produce code that matches the architecture.
@@ -19,7 +17,7 @@ This is the **development** repository. It is promoted to `isagawa-qa/platform-m
 
 Proven today, on record in [Actions](https://github.com/isagawa-qa/platform-mobile-apps-dev/actions):
 
-- **iOS on CI** runs green on the GitHub `macos-15` runner: the reference suite (`ios-reference.yml`), the simulator PoC (`ios-poc.yml`), and the live L3 batch (`prod-test-l3.yml`) all execute against a real iOS simulator.
+- **iOS on CI** runs green on the GitHub `macos-15` runner: the reference suite (`ios-reference.yml`) and the live L3 batch (`prod-test-l3.yml`) both execute against a real iOS simulator.
 - **Android on a Windows host** is recorded end to end in [`SETUP.md`](SETUP.md#windows-host) (JDK 17, Android SDK build-tools, an API 34 AVD, Appium with the UiAutomator2 driver, `/qa-workflow` discovery and generated tests). There is no Android CI workflow.
 
 Everything else in the support matrix below is an install path without a run record, or needs an input this repo does not ship (a device id, an Appium endpoint, or cloud credentials).
@@ -254,7 +252,7 @@ platform-mobile-apps-dev/
 +-- tests/
 |   +-- conftest.py                  # pytest fixtures (config, device, driver, mobile)
 |   +-- data/                        # test data
-+-- .github/workflows/               # ios-poc, ios-reference, ios-tunnel, prod-test-l3
++-- .github/workflows/               # ios-reference, prod-test-l3 (+ ios-tunnel, a manual debug tool)
 +-- apps/                            # app builds (downloaded at run time, gitignored)
 +-- .mcp.json                        # Appium discovery MCP server
 +-- CLAUDE.md                        # kernel instructions
