@@ -27,7 +27,11 @@ Execute tests following the testing skill protocol.
 
 ## Instructions
 
-**FIRST: Read protocol from `.claude/protocols/qa-protocol.md`**
+**FIRST: Resolve and read the protocol.** The protocol filename depends on the domain name, which is chosen at `/kernel/domain-setup`, so never assume it:
+
+1. Glob `.claude/state/*_workflow.json` and prefer the file whose stem matches `domain` in `.claude/state/session_state.json`. Read its `protocol_path` and use that file.
+2. If that file has no `protocol_path`, compose `.claude/protocols/{domain}-protocol.md` from `domain` in `.claude/state/session_state.json`.
+3. If neither resolves to an existing file, stop and tell the user to run `/kernel/session-start` then `/kernel/domain-setup`. Do not guess the filename.
 
 The testing skill defines:
 - Visual feedback requirements
