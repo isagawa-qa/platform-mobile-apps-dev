@@ -10,9 +10,13 @@ name: iOS interactive tunnel
 #     create sessions and drive the simulator.
 #   * This repository is PUBLIC, so the workflow log is public, so the URL is
 #     public the moment it is printed. Treat it as disclosed, not secret.
-#   * Mitigations: permissions are dropped to nothing so GITHUB_TOKEN grants no
-#     rights; the runner is ephemeral and holds no secrets; the app under test is
-#     a public demo; the window is bounded and short by default.
+#   * Mitigations: GITHUB_TOKEN holds only `statuses: write` (it can set a commit
+#     status and nothing else); the runner is ephemeral and holds no secrets; the
+#     app under test is a public demo; the window is bounded and short by default.
+#   * The URL, UDID and bundle id are ALSO posted as the `ios-tunnel` commit status
+#     on the dispatched commit, because a running job's log cannot be read through
+#     the API until the job ends. A client fetches them with:
+#       gh api repos/<owner>/<repo>/commits/<sha>/statuses --jq '.[] | select(.context=="ios-tunnel")'
 #   * Do NOT raise hold_minutes beyond what you are actively using, and do not
 #     point this at anything private.
 
@@ -24,7 +28,8 @@ on:
         required: true
         default: '30'
 
-permissions: {}
+permissions:
+  statuses: write
 
 jobs:
   tunnel:
@@ -125,6 +130,10 @@ jobs:
           BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
           WDA_APP: ${{ steps.wda.outputs.path }}
           HOLD_MINUTES: ${{ inputs.hold_minutes }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
           # Appium, cloudflared and the hold live in ONE step deliberately. A
@@ -213,18 +222,30 @@ jobs:
           ==========================================================
           FACTS
 
+          # Publish the session where a client can read it WHILE the job runs.
+          # target_url carries the tunnel URL; the description carries udid and
+          # bundle id (GitHub truncates descriptions at 140 chars - both fit).
+          post_status() {
+            gh api -X POST "repos/${REPO}/statuses/${SHA}" \
+              -f state="$1" -f context=ios-tunnel -f target_url="$2" -f description="$3" > /dev/null \
+              || echo "WARN: could not post the ios-tunnel commit status"
+          }
+          post_status pending "${URL}" "udid=${UDID} bundleId=${BUNDLE_ID}"
+
           MINUTES=${HOLD_MINUTES}
           [ "$MINUTES" -gt 240 ] && MINUTES=240
           END=$(( $(date +%s) + MINUTES * 60 ))
           while [ "$(date +%s)" -lt "$END" ]; do
             if ! tunnel_ok; then
               echo "session became unreachable through the tunnel"
+              post_status failure "${RUN_URL}" "tunnel became unreachable"
               curl -sS --max-time 5 http://127.0.0.1:4723/status || echo "(local Appium is DOWN too)"
               tail -30 appium.log; tail -20 cloudflared.log; exit 1
             fi
             sleep 30
           done
           echo "hold window elapsed cleanly"
+          post_status success "${RUN_URL}" "tunnel closed: hold window elapsed"
 
       - name: Upload logs
         if: always()
