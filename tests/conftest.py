@@ -117,6 +117,12 @@ def _resolve_app_capabilities(config, app_name, family, device_location):
     Rules, in order:
       - No default_app (the -web platforms) means no app: those drive a browser.
       - The cloud location takes a provider app reference, never a local path.
+      - iOS on the remote location takes the identifier only: its Appium server
+        (IOS_DEVICE_APPIUM_URL) is on another host, so a path on THIS machine
+        cannot reach it. Android's remote server defaults to localhost, where a
+        local path still works, so it keeps the path rule. The app must
+        already be installed on the remote device (the iOS tunnel workflow
+        pre-installs it and prints its bundle id).
       - Otherwise a path wins and `appium:app` installs and launches it.
       - Only when there is no path does the identifier apply, launching an app
         already installed. Expansion is lazy for exactly this reason: app_id is
@@ -147,6 +153,15 @@ def _resolve_app_capabilities(config, app_name, family, device_location):
         pytest.fail(
             f"app {app_name!r} has no {family!r} entry in {CONFIG_PATH}"
         )
+
+    if device_location == "remote" and family == "ios":
+        if not slot.get("app_id"):
+            pytest.fail(
+                f"app {app_name!r} (ios) has no app_id, and the remote location "
+                f"can only launch an app already installed on the remote device; "
+                f"set apps.{app_name}.ios.app_id in {CONFIG_PATH}"
+            )
+        return {"appium:bundleId": _expand_env(slot["app_id"])}
 
     if slot.get("path"):
         path = Path(_expand_env(slot["path"]))
