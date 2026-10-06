@@ -119,9 +119,25 @@ any of this.
 ## Windows host
 
 ### 4b.1 iOS on Windows
-There is no local Apple toolchain. Two supported routes:
-- Set `platforms.ios.device_location` to `cloud` or `remote` and put credentials in `.env`.
-- Or push to CI: `.github/workflows/ios-reference.yml` runs on a GitHub-hosted Mac.
+There is no local Apple toolchain. Three supported routes:
+- **Free, interactive: the iOS tunnel.** Run the **iOS interactive tunnel** workflow
+  (`.github/workflows/ios-tunnel.yml`, Actions → Run workflow, pick `hold_minutes`).
+  A GitHub-hosted Mac boots an iOS simulator with the reference app, starts Appium,
+  and publishes it through a Cloudflare quick tunnel. About 8 minutes in, the run
+  posts an `ios-tunnel` commit status whose link is the Appium URL and whose
+  description holds the `udid` and `bundleId`. Put those in `.env`:
+  ```
+  MOBILE_DEVICE_LOCATION_IOS=remote
+  IOS_DEVICE_APPIUM_URL=https://<name>.trycloudflare.com
+  IOS_UDID=<udid>
+  IOS_BUNDLE_ID=<bundleId>
+  ```
+  The session is free on a public repository and lives for `hold_minutes`. The URL
+  is an unauthenticated Appium endpoint and appears in the public run log: use it
+  only with the public demo app, never with a private build.
+- Set `platforms.ios.device_location` to `cloud` and put BrowserStack credentials in `.env`.
+- Or push to CI: `.github/workflows/ios-reference.yml` runs the reference flow on a
+  GitHub-hosted Mac, non-interactively.
 
 **Verify:** `python -c "import json;d=json.load(open('framework/resources/config/environment_config.json'));print(d['platforms']['ios']['device_location'])"`
 → prints the device location expression.
@@ -268,13 +284,22 @@ that stops a fresh installer dead unless session-start runs first.
 
 ## Step 7: Run the reference suite
 
+The reference flow lives in `framework/_reference/tests/`, outside `tests/`, so
+`tests/conftest.py` is not its ancestor. Load the conftest as a plugin so the
+exemplar gets the same fixtures a generated suite gets:
+
 ```bash
-pytest -m ios --platform=ios        # macOS, or CI
-pytest -m android --platform=android
+PYTHONPATH=tests pytest -p conftest framework/_reference/tests -m ios --platform=ios
+PYTHONPATH=tests pytest -p conftest framework/_reference/tests -m android --platform=android
 ```
 
-**Expect:** Reference Flow 1 — log in, add a product to the cart, check out —
-running as one test body.
+On Windows PowerShell, set `$env:PYTHONPATH="tests"` first. With 4b.1's tunnel `.env`,
+the iOS line runs from Windows against the GitHub-hosted simulator.
+
+**Expect:** `1 passed`. The test is Reference Flow 1 (browse the catalog, open a
+product, add it to the cart, assert the cart holds it), run as one test body.
+A plain `pytest -m ios` collects only generated suites under `tests/`, which is
+empty until you build one.
 
 ## Next Steps
 

@@ -156,21 +156,24 @@ jobs:
           IOS_BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
         run: |
           set -euo pipefail
-          # `tests/` ships with conftest.py and data/ only - generated suites land
-          # in tests/<app>/ when /qa-workflow builds them, exactly as the template
-          # does. framework/_reference/ is a code exemplar to read, not a suite to
-          # run: tests/conftest.py is not an ancestor of it, so its fixtures do not
-          # apply there. Until a suite exists, pytest exits 5 (no tests collected)
-          # and a bare invocation paints the run red for an empty repo rather than
-          # for a defect. Exit 5 is therefore reported and treated as a clean skip;
-          # every other non-zero code still fails the job.
+          # (a) The reference flow ALWAYS runs. framework/_reference/ is not under
+          # tests/, so tests/conftest.py is not its ancestor and its fixtures do not
+          # apply on their own; loading conftest as a plugin (-p conftest, with
+          # tests/ on PYTHONPATH) gives the exemplar the same fixtures a generated
+          # suite gets. Until 2026-10-06 this step ran only (b), collected ZERO
+          # tests, and reported exit 5 as success - a green badge over nothing.
+          # Here exit 5 is a FAILURE: the reference flow must be collected.
+          PYTHONPATH=tests python -m pytest -p conftest framework/_reference/tests \
+            -m ios --platform=ios -v --tb=short
+          # (b) Generated suites. `tests/` ships with conftest.py and data/ only;
+          # suites land in tests/<app>/ when the QA workflow builds them. An empty
+          # tests/ makes pytest exit 5, which is reported, not painted red.
           set +e
           python -m pytest -m ios --platform=ios -v --tb=short
           status=$?
           set -e
           if [ "$status" -eq 5 ]; then
-            echo "::notice::No iOS suite collected yet - tests/ holds conftest.py and data/ only."
-            echo "::notice::Generate one with /qa-workflow; this job then runs it against the simulator."
+            echo "::notice::No generated iOS suite under tests/ yet - only the reference flow ran."
             exit 0
           fi
           exit "$status"

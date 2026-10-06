@@ -140,7 +140,7 @@ What runs where today. `runs today` means an exercised path (a CI run on record,
 | Platform | Device location | macOS host | Windows host |
 |---|---|---|---|
 | iOS | local | supported, unverified | not supported |
-| iOS | remote | needs IOS_DEVICE_APPIUM_URL + IOS_UDID | needs IOS_DEVICE_APPIUM_URL + IOS_UDID |
+| iOS | remote | needs IOS_DEVICE_APPIUM_URL + IOS_UDID | runs today (free `ios-tunnel` workflow, [SETUP 4b.1](SETUP.md#4b1-ios-on-windows)) |
 | iOS | cloud | needs BrowserStack credentials | needs BrowserStack credentials |
 | iOS | ci | runs today | runs today |
 | Android | local | supported, unverified | runs today |
@@ -201,8 +201,8 @@ Details and the verify step: [`SETUP.md#step-6-run-kernelsession-start-then-kern
 ### Tests
 
 ```bash
-pytest -m ios --platform=ios           # iOS reference suite (reachable simulator; what CI runs)
-pytest -m android --platform=android   # Android reference suite (booted emulator/device + Appium)
+PYTHONPATH=tests pytest -p conftest framework/_reference/tests -m ios --platform=ios          # iOS reference flow (what CI runs)
+PYTHONPATH=tests pytest -p conftest framework/_reference/tests -m android --platform=android  # Android reference flow
 
 pytest --collect-only                  # no device yet: confirm the project collects (no session)
 ```
@@ -252,7 +252,7 @@ platform-mobile-apps-dev/
 +-- tests/
 |   +-- conftest.py                  # pytest fixtures (config, device, driver, mobile)
 |   +-- data/                        # test data
-+-- .github/workflows/               # ios-reference, prod-test-l3 (+ ios-tunnel, a manual debug tool)
++-- .github/workflows/               # ios-reference, prod-test-l3, ios-tunnel (free remote iOS from any host)
 +-- apps/                            # app builds (downloaded at run time, gitignored)
 +-- .mcp.json                        # Appium discovery MCP server
 +-- CLAUDE.md                        # kernel instructions
