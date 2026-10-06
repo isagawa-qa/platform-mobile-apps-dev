@@ -100,6 +100,19 @@ jobs:
           appium driver install "xcuitest@${XCUITEST_DRIVER_VERSION}"
           appium driver list --installed
 
+      # A first session normally BUILDS WebDriverAgent with xcodebuild, which
+      # takes minutes. Through the tunnel that request would die at Cloudflare's
+      # ~100 s proxy timeout (HTTP 524). The driver's prebuilt simulator WDA
+      # removes the build, so sessions start in seconds.
+      - name: Download prebuilt WebDriverAgent for the simulator
+        id: wda
+        run: |
+          set -euo pipefail
+          appium driver run xcuitest download-wda -- --outdir="${RUNNER_TEMP}/wda" --kind=sim --platform=ios
+          WDA_APP="$(find "${RUNNER_TEMP}/wda" -maxdepth 2 -name 'WebDriverAgentRunner-Runner.app' -print -quit)"
+          test -n "${WDA_APP}" || { echo "no WebDriverAgentRunner-Runner.app in the download"; ls -R "${RUNNER_TEMP}/wda"; exit 1; }
+          echo "path=${WDA_APP}" >> "$GITHUB_OUTPUT"
+
       - name: Pre-install the app on the simulator
         run: xcrun simctl install "${{ steps.sim.outputs.udid }}" "${{ steps.app.outputs.app_path }}"
 
@@ -110,6 +123,7 @@ jobs:
           PLATFORM_VERSION: ${{ steps.sim.outputs.version }}
           APP_PATH: ${{ steps.app.outputs.app_path }}
           BUNDLE_ID: ${{ steps.app.outputs.bundle_id }}
+          WDA_APP: ${{ steps.wda.outputs.path }}
           HOLD_MINUTES: ${{ inputs.hold_minutes }}
         run: |
           set -uo pipefail
@@ -120,7 +134,11 @@ jobs:
           # it, so anything that must stay up for the hold starts here.
           brew install cloudflared
 
-          appium --port 4723 --address 0.0.0.0 --log appium.log --log-level info                  --allow-cors &
+          # Runner-specific values are injected server-side, so a client only
+          # needs the tunnel URL and the UDID - never a path on this runner.
+          DEFAULT_CAPS="$(python3 -c 'import json,os; print(json.dumps({"appium:usePreinstalledWDA": True, "appium:prebuiltWDAPath": os.environ["WDA_APP"]}))')"
+          appium --port 4723 --address 0.0.0.0 --log appium.log --log-level info --allow-cors \
+            --default-capabilities "${DEFAULT_CAPS}" &
           APPIUM_PID=$!
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:4723/status > /dev/null && break
@@ -130,6 +148,20 @@ jobs:
             echo "Appium never became ready locally"; cat appium.log; exit 1
           fi
           echo "Appium up locally (pid ${APPIUM_PID})"
+
+          # Warm-up: prove a session starts BEFORE anything is exposed, using
+          # exactly the caps a remote client sends (udid + bundleId). A failure
+          # here is a WDA/driver problem, not a tunnel problem.
+          WARM_BODY="$(python3 -c 'import json,os; print(json.dumps({"capabilities": {"alwaysMatch": {"platformName": "iOS", "appium:automationName": "XCUITest", "appium:udid": os.environ["UDID"], "appium:bundleId": os.environ["BUNDLE_ID"], "appium:wdaLaunchTimeout": 600000}}}))')"
+          T0=$(date +%s)
+          curl -sS --max-time 900 -H 'Content-Type: application/json' -d "${WARM_BODY}" \
+            http://127.0.0.1:4723/session > warmup.json || true
+          SID="$(python3 -c 'import json; print(json.load(open("warmup.json")).get("value", {}).get("sessionId", ""))' 2>/dev/null || true)"
+          if [ -z "${SID}" ]; then
+            echo "warm-up session FAILED"; cat warmup.json; tail -60 appium.log; exit 1
+          fi
+          echo "warm-up session ${SID} started in $(( $(date +%s) - T0 ))s"
+          curl -sS -X DELETE "http://127.0.0.1:4723/session/${SID}" > /dev/null || true
 
           cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4723             > cloudflared.log 2>&1 &
           URL=""
@@ -142,14 +174,25 @@ jobs:
             echo "tunnel never published a URL"; tail -40 cloudflared.log; exit 1
           fi
 
-          # The edge takes a few seconds to route a freshly published hostname.
+          # The 2026-09-19 runs failed HERE with Appium up and the URL published:
+          # the runner's own resolver had negatively cached the brand-new
+          # hostname. Resolve through public DNS and pin it with --resolve, so the
+          # self-check measures the tunnel, not this runner's DNS cache.
+          HOST="${URL#https://}"
+          tunnel_ok() {
+            local ip
+            ip="$(dig +short @1.1.1.1 "${HOST}" A | grep -E '^[0-9.]+$' | head -1)"
+            [ -n "${ip}" ] || return 1
+            curl -sf --max-time 10 --resolve "${HOST}:443:${ip}" "${URL}/status" > /dev/null
+          }
           READY=""
-          for i in $(seq 1 45); do
-            if curl -sf --max-time 5 "${URL}/status" > /dev/null; then READY=1; break; fi
-            sleep 2
+          for i in $(seq 1 60); do
+            if tunnel_ok; then READY=1; break; fi
+            sleep 3
           done
           if [ -z "${READY}" ]; then
-            echo "tunnel published ${URL} but Appium unreachable through it after 90s"
+            echo "tunnel published ${URL} but Appium unreachable through it after 180s"
+            echo "--- dig @1.1.1.1 ---"; dig +short @1.1.1.1 "${HOST}" A || true
             echo "--- local appium ---";  curl -sS --max-time 5 http://127.0.0.1:4723/status || echo "(local Appium is DOWN)"
             echo "--- cloudflared ---";   tail -40 cloudflared.log
             exit 1
@@ -164,6 +207,9 @@ jobs:
           app             : ${APP_PATH}
           bundleId        : ${BUNDLE_ID}
           holding open for: ${HOLD_MINUTES} minutes
+          --- on your machine (device location 'remote') ---
+          IOS_DEVICE_APPIUM_URL=${URL}
+          IOS_UDID=${UDID}
           ==========================================================
           FACTS
 
@@ -171,7 +217,7 @@ jobs:
           [ "$MINUTES" -gt 240 ] && MINUTES=240
           END=$(( $(date +%s) + MINUTES * 60 ))
           while [ "$(date +%s)" -lt "$END" ]; do
-            if ! curl -sf --max-time 5 "${URL}/status" > /dev/null; then
+            if ! tunnel_ok; then
               echo "session became unreachable through the tunnel"
               curl -sS --max-time 5 http://127.0.0.1:4723/status || echo "(local Appium is DOWN too)"
               tail -30 appium.log; tail -20 cloudflared.log; exit 1
