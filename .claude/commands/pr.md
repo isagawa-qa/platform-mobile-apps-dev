@@ -22,6 +22,8 @@ Scan all framework layers:
 
 ### 2. Layer Architecture Checks
 
+These checks enforce the 5-layer contract stated in `DEVELOPER_GUIDE.md` (§ The 5-Layer Contract). When a check below and that section disagree, the guide wins and this file is the one to fix.
+
 #### Screen Layer (`framework/screens/**/*.py`)
 - [x] Has locators as class constants (platform-keyed dicts of `(AppiumBy.*, value)`)
 - [x] Has a `locator(self, name)` resolver
@@ -66,7 +68,7 @@ Scan all framework layers:
 ### 3. Senior SDET Quality Checks
 
 #### Evidence (mobile-specific, CRITICAL)
-- [ ] VIOLATION: A locator value that appears in no capture under `tests/_state/captures/`
+- [ ] VIOLATION: A locator value that appears in no capture under `tests/_state/captures/` (generated screens) or `framework/_reference/_captures/` (the reference layer)
 - [ ] VIOLATION: A locator changed without a capture citation in the commit
 
 #### Code Quality (Any violation triggers HITL)
