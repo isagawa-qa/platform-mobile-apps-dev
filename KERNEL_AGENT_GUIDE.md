@@ -60,7 +60,7 @@ This file defines:
 
 Do not proceed past this step until you have read `INTEGRATION.md`.
 
-A fresh clone ships **before domain setup**: no protocol and no domain hooks. The first session in it must run `/kernel/session-start`, then `/kernel/domain-setup`, in that order, and restart Claude Code when domain setup says so. Domain setup also probes the host tooling and asks which device location each platform uses.
+A fresh clone ships **before domain setup**: no protocol and no domain hooks. The first session in it must run `/kernel/session-start`, then `/kernel/domain-setup`, in that order, and restart Claude Code when domain setup says so. Domain setup also probes the host tooling and asks which device location each platform uses. Only then does `/qa-workflow` generate tests; run before domain setup, it has no protocol to work under.
 
 ---
 
