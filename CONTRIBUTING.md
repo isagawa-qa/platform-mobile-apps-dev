@@ -119,10 +119,12 @@ The platform uses [appium-mcp](https://github.com/appium/appium-mcp) to discover
 
 **Prerequisites:** Node.js 22+ (`node --version` to check) and npm.
 
-**Verify MCP is working:**
+**Verify the pinned server downloads and starts** (this is the `tooling` probe in `environment_config.json`):
 ```bash
 npx appium-mcp@1.94.1 --version
 ```
+
+Expect exit code 0 and a `FastMCP warning ... could not infer client capabilities` line, not a version number: the server starts on stdio, finds no MCP client attached, and exits. Claude Code is the client; the server is exercised for real in `/qa-workflow` step 4.
 
 Host-specific notes — the Android SDK path, and driving a device on another host — are in [SETUP.md § The discovery server](SETUP.md#the-discovery-server).
 
