@@ -1,72 +1,168 @@
-# Contributing to the Isagawa QA Platform (Mobile)
+# Contributing to Isagawa QA Platform (Mobile)
 
-Thank you for your interest in contributing. This repository generates Appium
-tests for native and hybrid mobile apps under a strict 5-layer architecture,
-enforced at runtime by the [Isagawa Kernel](https://github.com/isagawa-co/isagawa-kernel).
-Contributions are welcome as long as they preserve that architecture.
+Thank you for your interest in contributing. This repository generates Appium tests for native iOS and Android apps under a strict layered architecture, enforced at runtime by the [Isagawa Kernel](https://github.com/isagawa-co/isagawa-kernel). Contributions are welcome as long as they preserve that architecture.
 
 ## Architecture
 
-The platform uses a **5-layer architecture**: Test > Role > Task > Screen > MobileInterface.
+This project uses a **5-layer architecture** of Test, Role, Task, Screen Object and MobileInterface. The full contract — what each layer owns, what it never does, and which decorator it carries — is stated once, in [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#the-5-layer-contract). Read it there rather than from a summary; a restated rule is how a contract quietly forks.
 
 | Layer | Responsibility |
 |-------|---------------|
-| **Test** | Arrange/Act/Assert; orchestrates Roles, asserts via Screen state-checks |
-| **Role** | Composes Tasks into a user-persona workflow |
-| **Task** | One domain operation; composes Screen objects |
-| **Screen** | Per-platform locators as constants + atomic, fluent actions for one screen |
-| **MobileInterface** | Appium driver wrapper: finders, waits, interactions, gestures, context switching, app lifecycle |
+| **Test** | Orchestrates Roles, asserts results via Screen state-check methods |
+| **Role** | Coordinates Tasks into a persona's workflow |
+| **Task** | Performs one domain operation, composes Screen Objects |
+| **Screen Object** | Platform-keyed locators + atomic actions for one screen, fluent API (`return self`) |
+| **MobileInterface** | Appium wrapper — waits, gestures, contexts, app lifecycle, logging, re-raise |
 
-**Key rules:**
-- Locators live *only* in Screen objects, as per-platform constants chosen once at construction.
-- Business logic lives in Tasks and Roles; they stay platform-agnostic.
-- The `@automation_logger` decorator goes on every Task, Role, and Test method.
-- The per-platform Screen is selected at construction, so Tasks and Roles never branch on platform.
+**Key rules for contributors:**
+- Locators live *only* in Screen Objects, and every value must appear in a captured page source
+- A Screen constant carries a key only for a platform that was captured; there is no `"default"` key
+- Tasks and Roles never return values and never branch on platform
+- `@autologger.automation_logger` on every Task, Role, and Test method
 
-See the [Architecture section of the README](README.md#architecture) for the full
-explanation. **Before writing any code, read the reference implementations in
-[`framework/_reference/`](framework/_reference/)** — the kernel reads them first and
-will not generate a layer without its reference.
+See [docs/architecture.md](docs/architecture.md) for the layer-by-layer walkthrough with excerpts. Before writing any code, read the reference implementations in [`framework/_reference/`](framework/_reference/) — the kernel reads them first and will not generate a layer without its reference.
+
+---
 
 ## What We're Looking For
 
-Contributions that extend the platform's reach while preserving the architecture:
+We welcome contributions that extend the platform's reach while preserving the layered architecture. Here are the areas where help is most needed:
 
-### Coverage
-- **New Screens, Tasks, and Roles** that model additional app flows, following the reference patterns.
-- **Additional platforms** across the four supported keys — `ios`, `android`, `ios-web`, `android-web`.
-- **Cloud device providers** (e.g. BrowserStack) wired through the existing `device_location` config and environment variables.
+### Framework Ports
 
-### Infrastructure & Observability
-- An **Android CI** workflow (there is none today; iOS runs on the `macos-15` runner).
-- **Reporting** improvements beyond `pytest-html`, and failure notifications.
-- **Docker** or other containerized execution for the Appium host.
+The current implementation is Python + Appium (XCUITest and UiAutomator2). We'd welcome the same layered architecture on other mobile stacks:
+
+- **Espresso** (Kotlin/Java) — an Android-native MobileInterface, keeping Task/Role/Test unchanged
+- **XCUITest native** (Swift) — an iOS-native implementation for teams already in Xcode
+- **Maestro** — a YAML-driven variant that keeps the Screen/Task separation
+
+### Language Support
+
+Bring the layered architecture to other language ecosystems on top of Appium:
+
+- **TypeScript/JavaScript** — WebdriverIO + Appium with the same layer separation
+- **Java** — Appium java-client with equivalent Screen Object and Task patterns
+- **C#/.NET** — Appium .NET client with NUnit/xUnit
+
+### New Test Layers
+
+Extend the architecture beyond native screens — same layered approach, different interfaces:
+
+- **Hybrid and mobile web** — the Flow 2 reference (a WebView screen, switch in and back out) is designed but not yet delivered; see `L3-02` in [PLATFORM_GUIDE.md](PLATFORM_GUIDE.md#what-runs-today)
+- **API layer** — an HTTP-client interface under the same Task/Role/Test layers, for setting up app state before a UI flow
+
+### CI/CD & Infrastructure
+
+- **Android CI** — there is no Android workflow today; iOS runs on the GitHub `macos-15` runner (a simulator)
+- **Real-device iOS** — `L3-03`, `L3-04` and `L3-05` are **BLOCKED with their gates OPEN** until a device cloud or a Mac-built WebDriverAgent is available; wiring and proving either is welcome
+- **Docker** — containerized Appium host for Android emulators
+
+### Reporting & Observability
+
+- **Allure** integration for richer test reports
+- **HTML report** improvements beyond pytest-html (device, platform and capture links per test)
+- **Slack/Teams notifications** on test failure
+
+### Example Test Suites
+
+Complete working examples on public demo apps, built with `/qa-workflow` from live captures:
+
+- Login and logout (the reference flow has no login step today)
+- Checkout — the reference flow stops at the cart's "Proceed To Checkout"
+- Search, sort and filter on a catalog
+- Multi-role scenarios across two sessions
 
 ### Documentation
-- Tutorials, walkthroughs, and setup notes for hosts and devices not yet covered in [`SETUP.md`](SETUP.md).
+
+- Tutorials and walkthroughs, especially per host (macOS, Windows)
+- Video guides
+- Translations
+
+---
 
 ## Development Setup
 
-Setup is host-specific (macOS and Windows differ for iOS vs Android). The full,
-verified steps live in [`SETUP.md`](SETUP.md):
+### 1. Clone and install
 
-- Prerequisites for all hosts: [`SETUP.md#prerequisites-all-hosts`](SETUP.md#prerequisites-all-hosts)
-- Your host section: [`SETUP.md#macos-host`](SETUP.md#macos-host) or [`SETUP.md#windows-host`](SETUP.md#windows-host)
-- The Appium element-discovery MCP server (pre-wired in `.mcp.json`): [`SETUP.md#the-discovery-server`](SETUP.md#the-discovery-server)
-- Verify your setup: [`SETUP.md#step-5-verify-setup`](SETUP.md#step-5-verify-setup)
+```bash
+git clone https://github.com/isagawa-qa/platform-mobile-apps.git
+cd platform-mobile-apps
+python -m venv .venv
+```
 
-App builds under test are downloaded at run time and never committed.
+Activate the environment the way your host does it ([SETUP.md Step 2](SETUP.md#step-2-python-environment)), then:
+
+```bash
+python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+### 2. Configure MCP (required for AI-powered test generation)
+
+The platform uses [appium-mcp](https://github.com/appium/appium-mcp) to discover elements on a live device. It is pre-configured in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "appium-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["appium-mcp@1.94.1"],
+      "env": {
+        "AI_VISION_ENABLED": "false",
+        "APPIUM_MCP_ON_CLIENT_DISCONNECT": "delete_all"
+      }
+    }
+  }
+}
+```
+
+**Prerequisites:** Node.js 22+ (`node --version` to check) and npm.
+
+**Verify MCP is working:**
+```bash
+npx appium-mcp@1.94.1 --version
+```
+
+Host-specific notes — the Android SDK path, and driving a device on another host — are in [SETUP.md § The discovery server](SETUP.md#the-discovery-server).
+
+### 3. Configure environment
+
+Edit `.env` to choose where each platform's device is. Comments go on their own line; a value with no default must be set.
+
+```text
+MOBILE_DEVICE_LOCATION_IOS=local
+MOBILE_DEVICE_LOCATION_ANDROID=local
+```
+
+`local` iOS needs a macOS host; on Windows set iOS to `remote` and follow [SETUP 4b.1](SETUP.md#4b1-ios-on-windows). Every other variable (app paths, device ids, Appium URLs, cloud credentials) is listed with its default in `.env.example`. Then complete your host section: [macOS](SETUP.md#macos-host) or [Windows](SETUP.md#windows-host).
+
+### 4. Run tests
+
+With no device yet, confirm the project collects:
+
+```bash
+python -m pytest --collect-only
+```
+
+With a device and Appium running, the reference flow and your platform's suites:
+
+```bash
+PYTHONPATH=tests python -m pytest -p conftest framework/_reference/tests -m ios --platform=ios -v
+python -m pytest -m android --platform=android -v
+```
+
+---
 
 ## PR Process
 
-1. Fork the repo.
-2. Create a feature branch: `git checkout -b feature/your-feature`.
-3. Follow the 5-layer architecture — read [`framework/_reference/`](framework/_reference/) before writing code.
-4. Ensure tests pass for your platform: `pytest -m ios --platform=ios` (or the equivalent for your target). With no device yet, confirm the project still collects: `pytest --collect-only`.
-5. Submit a PR describing which layer(s) your change touches.
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Follow the layered architecture — read `framework/_reference/` before writing code, and run `/pr` on your change
+4. Ensure tests pass for the platform you changed, and that `python -m pytest --collect-only` still collects
+5. Submit a PR with a clear description of what layer(s) your change touches, and which capture backs any new locator
 
-For a new platform, provider, or large feature, open an issue first to discuss the approach:
-[GitHub Issues](https://github.com/isagawa-qa/platform-mobile-apps-dev/issues).
+For framework ports, new language support or a new device provider, open an issue first to discuss the approach.
 
 ## Commit Convention
 
@@ -81,8 +177,6 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Questions?
 
-Open an [issue](https://github.com/isagawa-qa/platform-mobile-apps-dev/issues) or
-reach out at **[alain@isagawa.co](mailto:alain@isagawa.co)**.
+Open an issue or reach out at **[alain@isagawa.co](mailto:alain@isagawa.co)**.
 
-This project is under the Isagawa Proprietary License (evaluation use only); see
-[LICENSE](LICENSE). Contributions are accepted under the same terms.
+This project is under the Isagawa Proprietary License (evaluation use only); see [LICENSE](LICENSE). Contributions are accepted under the same terms.
